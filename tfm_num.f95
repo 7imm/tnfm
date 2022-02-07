@@ -365,10 +365,10 @@ module tfm_num
 
       ! removal of layers
       am = -dm
-      do n = nz, 1, -1
-        am = am - ((p%depth(nz) - p%depth(n)) * p%density(n))
+      do n = nz - 1, 1, -1
+        am = am - ((p%depth(n+1) - p%depth(n)) * p%density(n))
         if ( am <= 0.0 ) EXIT
-        dm = dm + ((p%depth(nz) - p%depth(n)) * p%density(n))
+        dm = dm + ((p%depth(n+1) - p%depth(n)) * p%density(n))
       end do
       dz = dm / p%density(n)
       n = n + 1
