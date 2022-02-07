@@ -3,26 +3,29 @@ module tfm_constants
   implicit none
 
   ! acceleration due to gravity (kg / m s**2)
-  real(prec), parameter :: ACC_GRAVITY = 9.81
+  real(prec), parameter :: ACC_GRAVITY = 9.81_prec
 
   ! gas constant (J / K mol)
-  real(prec), parameter :: GAS_CONST = 8.31446261815324
+  real(prec), parameter :: GAS_CONST = 8.31446261815324_prec
 
   ! ice density (kg / m**3)
-  real(prec), parameter :: ICE_DENSITY = 917.0
+  real(prec), parameter :: ICE_DENSITY = 917.0_prec
 
   ! water density (kg / m**3)
-  real(prec), parameter :: WATER_DENSITY = 1000.0
+  real(prec), parameter :: WATER_DENSITY = 1000.0_prec
 
   ! seconds per year (s / yr)
-  real(prec), parameter :: SECONDS_YEAR = (3600.0 * 24.0 * 365.0)
+  real(prec), parameter :: SECONDS_YEAR = (3600.0_prec * 24.0_prec * 365.0_prec)
 
   ! seconds per day (s / d)
-  real(prec), parameter :: SECONDS_DAY = (3600.0 * 24.0)
+  real(prec), parameter :: SECONDS_DAY = (3600.0_prec * 24.0_prec)
 
   ! specific heat capacity of ice (J / kg K) Reijmer et al. 2012
-  real(prec), parameter :: SPECIFIC_HEAT_ICE = 2050.0
+  real(prec), parameter :: SPECIFIC_HEAT_ICE = 2050.0_prec
 
   ! latent heat of ice (J / kg) Reijmer et al. 2012
-  real(prec), parameter :: LATENT_HEAT = 334000.0
+  real(prec), parameter :: LATENT_HEAT = 334000.0_prec
+
+  ! melt tempreature (K)
+  real(prec), parameter :: MELT_TEMP = 273.15_prec
 end module tfm_constants
