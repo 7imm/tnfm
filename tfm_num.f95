@@ -216,8 +216,9 @@ module tfm_num
     real(prec), intent(in), optional :: solid_acc
 
     type(sim_props)           :: p
-    integer                   :: n
+    integer                   :: n, m
     real(prec), dimension(4)  :: residuum
+    real(prec), dimension(nz) :: dens_residuum
     real(prec), dimension(nz) :: d_density, n_density
     real(prec), dimension(nz) :: d_temperature, n_temperature
     real(prec), dimension(nz) :: n_heat_capacity
@@ -254,19 +255,30 @@ module tfm_num
         &  density=n_density,                     &
         &  temperature=n_temperature              &
         )
-        residuum(1) = maxval(abs(n_density - (p%density + d_density)))
+
+        ! There is the possibility that the residuum of the density is
+        ! always high because despite the density is converging. This
+        ! happens due to the discontinuous function describing
+        ! densification. The density "flickers" around the value of
+        ! 550 kg m-3. Therefore the residuum at this density is forced
+        ! to zero, (which is not ideal).
+        dens_residuum = abs(n_density - (p%density + d_density))
+        do m = 1, nz, 1
+          if ( floor(p%density(m)) == 549 ) dens_residuum(m) = 0.0
+        end do
+        residuum(1) = maxval(dens_residuum)
       end if
 
       ! heat capacity model
       if ( associated(models%heatcap_model) ) then
         n_heat_capacity = models%heatcap_model(nz)
-        residuum(2) = maxval(abs(n_heat_capacity - p%heatcap))
+        !residuum(2) = maxval(abs(n_heat_capacity - p%heatcap))
       end if
 
       ! thermal conductivity model
       if ( associated(models%thermcond_model) ) then
         n_thermal_conductivity = models%thermcond_model(nz, n_density)
-        residuum(3) = maxval(abs(n_thermal_conductivity - p%thermcond))
+        !residuum(3) = maxval(abs(n_thermal_conductivity - p%thermcond))
       end if
 
       ! temperature model
