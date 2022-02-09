@@ -5,6 +5,7 @@ module tfm_density
 
   contains
 
+
   subroutine tfm_density_HLtype(nz, dt, comp_accumulation, stage1_params, &
     & stage2_params, temperature, density, d_density)
     implicit none
@@ -24,28 +25,74 @@ module tfm_density
 
     ! boundary between first and seconds stage
     do n = nz, 1, -1
-      if ( density(n) >= 550.0 ) EXIT
+      
+      ! first stage
+      if ( density(n) < 550.0 ) then
+        c(n) = (                                                   &
+        &  stage1_params(1)                                        &
+        &  * (comp_accumulation**stage1_params(2))                 &
+        &  * ACC_GRAVITY                                           &
+        &  * exp(-stage1_params(3) / (GAS_CONST * temperature(n))) &
+        )
+
+      ! seconds stage
+      else if ( density(n) >= 550.0 ) then
+        c(n) = (                                                   &
+        &  stage2_params(1)                                        &
+        &  * (comp_accumulation**stage2_params(2))                 &
+        &  * ACC_GRAVITY                                           &
+        &  * exp(-stage2_params(3) / (GAS_CONST * temperature(n))) &
+        )
+      end if
+
     end do
-
-    ! first stage
-    c(n:nz) = (                                                   &
-    &  stage1_params(1)                                           &
-    &  * (comp_accumulation**stage1_params(2))                    &
-    &  * ACC_GRAVITY                                              &
-    &  * exp(-stage1_params(3) / (GAS_CONST * temperature(n:nz))) &
-    )
-
-    ! seconds stage
-    c(1:n-1) = (                                                   &
-    &  stage2_params(1)                                            &
-    &  * (comp_accumulation**stage2_params(2))                     &
-    &  * ACC_GRAVITY                                               &
-    &  * exp(-stage2_params(3) / (GAS_CONST * temperature(1:n-1))) &
-    )
     
     ! density change
     d_density = ((dt / SECONDS_YEAR) * (c * (ICE_DENSITY - density)))
   end subroutine tfm_density_HLtype
+
+
+  !subroutine tfm_density_HLtype(nz, dt, comp_accumulation, stage1_params, &
+  !  & stage2_params, temperature, density, d_density)
+  !  implicit none
+
+  !  integer, intent(in)                   :: nz
+  !  real(prec), intent(in)                :: dt
+  !  real(prec), intent(in)                :: comp_accumulation
+  !  real(prec), dimension(3), intent(in)  :: stage1_params
+  !  real(prec), dimension(3), intent(in)  :: stage2_params
+  !  real(prec), dimension(nz), intent(in) :: temperature
+  !  real(prec), dimension(nz), intent(in) :: density
+
+  !  real(prec), dimension(nz), intent(inout) :: d_density
+
+  !  integer                   :: n
+  !  real(prec), dimension(nz) :: c
+
+  !  ! boundary between first and seconds stage
+  !  do n = nz, 1, -1
+  !    if ( density(n) >= 550.0 ) EXIT
+  !  end do
+
+  !  ! first stage
+  !  c(n:nz) = (                                                   &
+  !  &  stage1_params(1)                                           &
+  !  &  * (comp_accumulation**stage1_params(2))                    &
+  !  &  * ACC_GRAVITY                                              &
+  !  &  * exp(-stage1_params(3) / (GAS_CONST * temperature(n:nz))) &
+  !  )
+
+  !  ! seconds stage
+  !  c(1:n-1) = (                                                   &
+  !  &  stage2_params(1)                                            &
+  !  &  * (comp_accumulation**stage2_params(2))                     &
+  !  &  * ACC_GRAVITY                                               &
+  !  &  * exp(-stage2_params(3) / (GAS_CONST * temperature(1:n-1))) &
+  !  )
+  !  
+  !  ! density change
+  !  d_density = ((dt / SECONDS_YEAR) * (c * (ICE_DENSITY - density)))
+  !end subroutine tfm_density_HLtype
 
 
   function tfm_density_medley2020(nz, dt, accumulation, &
@@ -98,8 +145,8 @@ module tfm_density
     &  comp_accumulation,     &
     &  (/ a0, ALPHA0, EC0 /), &
     &  (/ a1, ALPHA1, EC1 /), &
-    &  temperature,         &
-    &  density,             &
+    &  temperature,           &
+    &  density,               &
     &  d_density              &
     )
   end function tfm_density_medley2020

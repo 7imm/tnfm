@@ -37,19 +37,20 @@ module tfm_liquid
       dz = (depth(n+1) - depth(n))
 
       ! potential mass per square meter that might be frozen
-      refreeze_cap = (                                                     &
-      &  (SPECIFIC_HEAT_ICE * density(n) * dz * (273.15 - temperature(n))) &
-      &  / LATENT_HEAT                                                     &
+      refreeze_cap = (                                                        &
+      &  (SPECIFIC_HEAT_ICE * density(n) * dz * (MELT_TEMP - temperature(n))) &
+      &  / LATENT_HEAT                                                        &
       )
 
       ! pore space in kg ice equivalent per square meter
       ice_cap = (1.0 - (density(n) / ICE_DENSITY)) * ICE_DENSITY * dz
 
       ! pore space available until a impermeable layer is formed
-      imp_cap = (IMP_DENSITY - density(n)) * dz
+      imp_cap = max(0.0, (IMP_DENSITY - density(n)) * dz)
 
       ! maximum amount of water to be refrozen
       storage = min(refreeze_cap, ice_cap, water, imp_cap)
+
       if ( storage < 0.0 ) then
         print *, 'module: tfm_liquid                                   '
         print *, 'subroutine: tfm_liquid_bucket                        '

@@ -244,7 +244,7 @@ module tfm_num
 
     ! Picard loop
     n = 0
-    do while ( (maxval(abs(residuum)) > 1.0e-1) .and. (n < 10000) )
+    do while ( (maxval(abs(residuum)) > 1.0e-2) .and. (n < 10000) )
       
       ! density model
       if ( associated(models%dens_model) ) then
@@ -264,7 +264,7 @@ module tfm_num
         ! to zero, (which is not ideal).
         dens_residuum = abs(n_density - (p%density + d_density))
         do m = 1, nz, 1
-          if ( floor(p%density(m)) == 549 ) dens_residuum(m) = 0.0
+          if ( floor(n_density(m)) == 550 ) dens_residuum(m) = 0.0
         end do
         residuum(1) = maxval(dens_residuum)
       end if
@@ -305,6 +305,8 @@ module tfm_num
       n = n + 1
     end do
 
+    !print *, n, nz, maxval(abs(residuum)), residuum(1), residuum(4)
+
     ! new value
     p%density     = n_density
     p%temperature = n_temperature
@@ -336,7 +338,7 @@ module tfm_num
     surf_dens = forcing(4)
     solid_acc = forcing(5)
 
-    ! mass to be removed
+    ! mass to be removed or added
     dm = solid_acc * dt * WATER_DENSITY
 
     ! theres accumulation and the maximum number of elements is reached
@@ -357,11 +359,21 @@ module tfm_num
       nz = nz - 1
     end if
 
+    ! the accumulation is zero
+    if ( dm == 0.0 ) then
+      RETURN
+
     ! theres accumulation and there are still elements available
-    if ( dm > 0.0 ) then
+    else if ( dm > 0.0 ) then
 
       ! height change computed from surface density
       dz = dm / surf_dens
+
+      ! with very small accumulation there can occure precison problem
+      ! causing two layers with the same depth
+      if ( ((p%depth(nz-1) + dz) - p%depth(nz-1)) == 0.0 ) then
+        RETURN
+      end if
 
       ! add new layer
       nz = nz + 1
@@ -371,6 +383,7 @@ module tfm_num
       p%heatcap(1:nz)   = models%heatcap_model(nz)
       p%thermcond(1:nz) = models%thermcond_model(nz, p%density(1:nz))
       p%liquidwater(nz) = 0.0
+
 
     ! theres ablation
     else if ( dm < 0.0 ) then

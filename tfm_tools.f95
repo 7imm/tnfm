@@ -4,6 +4,45 @@ module tfm_tools
   contains
 
 
+  subroutine tfm_tools_indicate_tstep(nt, t)
+    implicit none
+
+    integer, intent(in) :: nt, t
+    real                :: perc
+    integer             :: n, n_perc
+
+    ! some computations
+    perc = (real(t) / real(nt)) * 100.0
+    n_perc = floor(perc / 5.0)
+
+    ! number of time steps
+    write(*, '(a)', advance='no') '\rtimestep: '
+    write(*, '(i6,a,i6)', advance='no') t, ' of ', nt
+
+    ! bar
+    write(*, '(a)', advance='no') ' |'
+    do n = 1, 20, 1
+       if ( n < n_perc ) then
+         write(*, '(a)', advance='no') '='
+       else if (n == n_perc) then
+         write(*, '(a)', advance='no') '>'
+       else
+         write(*, '(a)', advance='no') ' '
+       end if
+    end do
+    write(*, '(a)', advance='no') '|'
+
+    ! percentenge
+    write(*, '(f6.2,a)', advance='no') perc, ' %'
+
+    ! done
+    if ( t == nt ) then
+      write(*, '(a)') ''
+      write(*, '(a)') 'Done!'
+    end if
+  end subroutine tfm_tools_indicate_tstep
+
+
   subroutine ice_mask_check(ice_mask_nc, nxy, lons, lats, check)
     use netcdf
     implicit none
