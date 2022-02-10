@@ -1,3 +1,120 @@
+module tfm_output
+  use settings
+  use netcdf
+  implicit none
+
+
+  type out_ncid
+    integer :: id
+    integer :: time_dim
+    integer :: depth_dim
+    integer :: time_var
+    integer :: depth_var
+    integer :: dens_var
+    integer :: temp_var
+  end type out_ncid
+
+
+  contains
+
+
+  subroutine tfm_ncout_init(fname, deflate_level, np, ncid)
+    implicit none
+
+    character(len=*), intent(in)          :: fname
+    integer, intent(in)                   :: deflate_level
+    integer, intent(in)                   :: np
+    type(out_ncid), intent(inout)         :: ncid
+    integer                               :: stat
+
+    stat = nf90_create(path=fname, cmode=nf90_netcdf4, ncid=ncid%id)
+
+    stat = nf90_def_dim(ncid%id, 'time',  nf90_unlimited, ncid%time_dim)
+    stat = nf90_def_dim(ncid%id, 'depth', np, ncid%depth_dim)
+
+    stat = nf90_def_var(                    &
+    &  ncid%id, 'time', nf90_float,         &
+    &  (/ ncid%time_dim /),                 &
+    &  ncid%time_var,                       &
+    &  deflate_level=deflate_level          &
+    )
+    stat = nf90_def_var(                    &
+    &  ncid%id, 'depth', nf90_float,        &
+    &  (/ ncid%depth_dim, ncid%time_dim /), &
+    &  ncid%depth_var,                      &
+    &  deflate_level=deflate_level          &
+    )
+    stat = nf90_def_var(                    &
+    &  ncid%id, 'density', nf90_float,      &
+    &  (/ ncid%depth_dim, ncid%time_dim /), &
+    &  ncid%dens_var,                       &
+    &  deflate_level=deflate_level          &
+    )
+    stat = nf90_def_var(                    &
+    &  ncid%id, 'temperature', nf90_float,  &
+    &  (/ ncid%depth_dim, ncid%time_dim /), &
+    &  ncid%temp_var,                       &
+    &  deflate_level=deflate_level          &
+    )
+
+    stat = nf90_def_var_fill(ncid%id, ncid%time_var,  0, -9999.9)
+    stat = nf90_def_var_fill(ncid%id, ncid%depth_var, 0, -9999.9)
+    stat = nf90_def_var_fill(ncid%id, ncid%dens_var,  0, -9999.9)
+    stat = nf90_def_var_fill(ncid%id, ncid%temp_var,  0, -9999.9)
+  end subroutine tfm_ncout_init
+
+
+  subroutine tfm_ncout_write(ncid, t, nz, props, time)
+    implicit none
+
+    type(out_ncid), intent(in)              :: ncid
+    integer, intent(inout)                  :: t
+    integer, intent(in)                     :: nz
+    real(prec), dimension(6,nz), intent(in) :: props
+    real(prec), intent(in)                  :: time
+    
+    integer :: stat
+
+    t = t + 1
+
+    stat = nf90_put_var(        &
+    &  ncid%id, ncid%time_var,  &
+    &  (/ time /),              &
+    &  start=(/ t /),           &
+    &  count=(/ 1 /)            &
+    )
+    stat = nf90_put_var(        &
+    &  ncid%id, ncid%depth_var, &
+    &  props(1,:),              &
+    &  start=(/ 1, t /),        &
+    &  count=(/ nz, 1 /)        &
+    )
+    stat = nf90_put_var(        &
+    &  ncid%id, ncid%dens_var,  &
+    &  props(2,:),              &
+    &  start=(/ 1, t /),        &
+    &  count=(/ nz, 1 /)        &
+    )
+    stat = nf90_put_var(        &
+    &  ncid%id, ncid%temp_var,  &
+    &  props(3,:),              &
+    &  start=(/ 1, t /),        &
+    &  count=(/ nz, 1 /)        &
+    )
+  end subroutine tfm_ncout_write
+
+
+  subroutine tfm_ncout_close(ncid)
+    implicit none
+
+    type(out_ncid), intent(in) :: ncid
+    integer                    :: stat
+
+    stat = nf90_close(ncid%id)
+  end subroutine tfm_ncout_close
+end module tfm_output
+
+
 module tfm_tools
   use settings
   implicit none

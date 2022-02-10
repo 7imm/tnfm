@@ -2,30 +2,46 @@ program retmip
   use settings
   use tfm_num
   use tfm_tools
+  use tfm_output
+  use netcdf
   implicit none
 
-  integer, parameter :: NT = 49438
   integer, parameter :: NZ_INIT = 600
+  integer, parameter :: WRITE_INTER = (24 / 3)
 
-  character(len=*), parameter :: INP_FORC = '../RetMIP/RetMIP_Dye-2_long_forcing.dat'
-  character(len=*), parameter :: INP_INIT = '../RetMIP/RetMIP_Dye-2_long_init.dat'
+  !integer, parameter :: NT = 1436
+  integer, parameter :: NT = 49438
+  !integer, parameter :: NT = 1880
+  !integer, parameter :: NT = 42901
+  !integer, parameter :: NT = 13643
+
+  !character(len=*), parameter :: MODEL = 'Dye-2_16'
+  character(len=*), parameter :: MODEL = 'Dye-2_long'
+  !character(len=*), parameter :: MODEL = 'FA'
+  !character(len=*), parameter :: MODEL = 'Summit'
+  !character(len=*), parameter :: MODEL = 'KANU'
+
+  character(len=*), parameter :: INP_FORC = '../RetMIP/RetMIP_forcing_'//MODEL//'.dat'
+  character(len=*), parameter :: INP_INIT = '../RetMIP/RetMIP_init_'//MODEL//'.dat'
+  character(len=*), parameter :: NC_OUT   = './RetMIP_'//MODEL//'.nc'
 
   real(prec), dimension(6,NT)             :: forcing
   real(prec), dimension(NT)               :: runoff
   real(prec), dimension(:,:), allocatable :: props
 
+  ! netcdf
+  type(out_ncid) :: ncid
 
   type(sim_models) :: models
   real(prec)       :: dt
   integer          :: np, nz = NZ_INIT
-  integer          :: t
+  integer          :: t, n_out = 0
   integer          :: tic, toc
   real(prec)       :: rate
 
   ! forcing
   call retmip_forcing(NT, INP_FORC, forcing)
   dt = forcing(2,2) - forcing(2,1)
-
 
   ! profile initialization
   np = nz + NT
@@ -42,6 +58,10 @@ program retmip
   &  solve_liquid='bucket',                  &
   &  models=models                           &
   )
+
+  ! output file initialization
+  call tfm_ncout_init(NC_OUT, 0, np, ncid)
+  call tfm_ncout_write(ncid, n_out, nz, props, 0.0_prec)
 
   ! time loop
   call system_clock(tic, rate)
@@ -63,15 +83,21 @@ program retmip
     &  liquid_acc=forcing(6,t), &
     &  solid_acc=forcing(5,t)   &
     )
+    
+    if ( modulo((t - 1), WRITE_INTER) == 0 ) then
+      call tfm_ncout_write(ncid, n_out, nz, props, forcing(1,t))
+    end if
   end do
   call system_clock(toc, rate)
   write(*, '(a,f10.2,a)') 'time elapsed: ', real(toc - tic) / real(rate), ' s'
 
-  ! simple output
-  open(111, file='retmip_false.out', action='write')
-    write(111,*) props(1,1:nz)
-    write(111,*) props(2,1:nz)
-    write(111,*) props(3,1:nz)
+  ! close output file
+  call tfm_ncout_close(ncid)
+
+  open(111, file=MODEL//'.out', action='write')
+  do t = 1, nz, 1
+    write(111,*) props(1,t), props(2,t), props(3,t)
+  end do
   close(111)
 
   deallocate(props)
