@@ -9,6 +9,7 @@ module settings
     real(prec), dimension(:), pointer :: heatcap     => null()
     real(prec), dimension(:), pointer :: thermcond   => null()
     real(prec), dimension(:), pointer :: liquidwater => null()
+    real(prec), dimension(:), pointer :: age         => null()
   end type sim_props
 
 

@@ -40,6 +40,9 @@ melt_test: melt_test.f95 settings.o medley.o merra2.o tfm_tools.o tfm_density.o 
 retmip: retmip.f95 settings.o tfm_num.o tfm_temperature.o tfm_temperature.o tfm_liquid.o tfm_tools.o
 	$(FC) $(FLAGS) -o retmip retmip.f95 settings.o tfm_num.o tfm_temperature.o tfm_density.o tfm_liquid.o tfm_tools.o -L/usr/lib -lnetcdff -I/usr/include
 
+kohnen04long: kohnen04long.f95 settings.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_density.o tfm_tools.o
+	$(FC) $(FLAGS) -o kohnen04long kohnen04long.f95 settings.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_density.o tfm_tools.o -L/usr/lib -lnetcdff -I/usr/include
+
 clean:
 	rm *.o
 	rm *.mod

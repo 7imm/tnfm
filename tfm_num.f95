@@ -29,16 +29,16 @@ module tfm_num
 
   ! interface for densification function
   interface
-    function density_inter(nz, dz, accumulation, depth, density, temperature)
+    function density_inter(nz, dz, depth, density, temperature, age)
       use settings
       implicit none
 
       integer, intent(in)                   :: nz
       real(prec), intent(in)                :: dz
-      real(prec), intent(in)                :: accumulation
       real(prec), dimension(nz), intent(in) :: depth
       real(prec), dimension(nz), intent(in) :: density
       real(prec), dimension(nz), intent(in) :: temperature
+      real(prec), dimension(nz), intent(in) :: age
 
       real(prec), dimension(nz) :: density_inter
     end function density_inter
@@ -201,7 +201,7 @@ module tfm_num
   end subroutine tfm_num_modelinit
 
   
-  subroutine tfm_num_step(nz, dt, models, props, runoff, liquid_acc, solid_acc)
+  subroutine tfm_num_step(nz, dt, models, props, runoff, liquid_acc)
 
     implicit none
 
@@ -209,35 +209,38 @@ module tfm_num
     real(prec), intent(in) :: dt
 
     type(sim_models), intent(in)               :: models
-    real(prec), dimension(6,nz), intent(inout) :: props
+    real(prec), dimension(7,nz), intent(inout) :: props
     real(prec), intent(inout), optional        :: runoff
 
     real(prec), intent(in), optional :: liquid_acc
-    real(prec), intent(in), optional :: solid_acc
 
     type(sim_props)           :: p
     integer                   :: n, m
-    real(prec), dimension(4)  :: residuum
+    real(prec), dimension(5)  :: residuum
     real(prec), dimension(nz) :: dens_residuum
     real(prec), dimension(nz) :: d_density, n_density
     real(prec), dimension(nz) :: d_temperature, n_temperature
+    real(prec), dimension(nz) :: d_depth, n_depth
     real(prec), dimension(nz) :: n_heat_capacity
     real(prec), dimension(nz) :: n_thermal_conductivity
+    real(prec), dimension(nz) :: n_age
 
     call tfm_num_assign(nz, props, p)
 
     ! initialization
+    n_depth = p%depth
     n_density = p%density
     n_temperature = p%temperature
     n_heat_capacity = p%heatcap
     n_thermal_conductivity = p%thermcond
+    n_age = p%age
     d_density = 0.0
     d_temperature = 0.0
     residuum = 0.0
     residuum(1) = -9999.9
 
     ! liquid model
-    if ( associated(models%liquid_model) ) then
+    if ( (associated(models%liquid_model)) .and. (liquid_acc > 0.0) ) then
       call models%liquid_model(nz, dt, p%depth, p%density, &
         & p%temperature, p%liquidwater, liquid_acc, runoff)
     end if
@@ -250,10 +253,10 @@ module tfm_num
       if ( associated(models%dens_model) ) then
         d_density = models%dens_model(            &
         &  nz, dt,                                &
-        &  accumulation=(solid_acc + liquid_acc), &
-        &  depth=p%depth,                         &
+        &  depth=n_depth,                         &
         &  density=n_density,                     &
-        &  temperature=n_temperature              &
+        &  temperature=n_temperature,             &
+        &  age=n_age                              &
         )
 
         ! There is the possibility that the residuum of the density is
@@ -285,7 +288,7 @@ module tfm_num
       if ( associated(models%temp_model) ) then
         d_temperature = models%temp_model(             &
         &  nz, dt,                                     &
-        &  depth=p%depth,                              &
+        &  depth=n_depth,                              &
         &  density=n_density,                          &
         &  temperature=p%temperature,                  &
         &  heat_capacity=n_heat_capacity,              &
@@ -296,7 +299,17 @@ module tfm_num
         ))
       end if
 
+      ! depth evolution
+      d_depth = tfm_density_depth( &
+      &  nz,                       &
+      &  depth=p%depth,            &
+      &  density=p%density,        &
+      &  d_density=d_density       &
+      )
+      residuum(5) = maxval(abs(n_depth - (p%depth + d_depth)))
+
       ! reassignment
+      n_depth                = (p%depth + d_depth)
       n_density              = (p%density + d_density)
       n_temperature          = (p%temperature + d_temperature)
       n_heat_capacity        = n_heat_capacity
@@ -305,13 +318,16 @@ module tfm_num
       n = n + 1
     end do
 
-    !print *, n, nz, maxval(abs(residuum)), residuum(1), residuum(4)
+    ! raise the age
+    n_age = tfm_num_age(nz, dt, p%age)
 
     ! new value
+    p%depth       = n_depth
     p%density     = n_density
     p%temperature = n_temperature
     p%heatcap     = n_heat_capacity
     p%thermcond   = n_thermal_conductivity
+    p%age         = n_age
   end subroutine tfm_num_step
 
 
@@ -324,7 +340,7 @@ module tfm_num
     type(sim_models), intent(in)         :: models
 
     integer, intent(inout)                     :: nz
-    real(prec), dimension(6,np), intent(inout) :: props
+    real(prec), dimension(7,np), intent(inout) :: props
 
     type(sim_props) :: p
     integer         :: n
@@ -348,13 +364,15 @@ module tfm_num
       p%density(1:nz-1)     = p%density(2:nz)
       p%temperature(1:nz-1) = p%temperature(2:nz)
       p%liquidwater(1:nz-1) = p%liquidwater(2:nz)
+      p%age(1:nz-1)         = p%age(2:nz)
 
       p%depth(nz)       = -9999.9
       p%density(nz)     = -9999.9
       p%temperature(nz) = -9999.9
       p%liquidwater(nz) = -9999.9
       p%heatcap(nz)     = -9999.9
-      p%thermcond       = -9999.9
+      p%thermcond(nz)   = -9999.9
+      p%age(nz)         = -9999.9
 
       nz = nz - 1
     end if
@@ -382,7 +400,8 @@ module tfm_num
       p%temperature(nz) = surf_temp
       p%heatcap(1:nz)   = models%heatcap_model(nz)
       p%thermcond(1:nz) = models%thermcond_model(nz, p%density(1:nz))
-      p%liquidwater(nz) = 0.0
+      p%liquidwater(nz) = 0.0_prec
+      p%age(nz)         = 0.0_prec
 
 
     ! theres ablation
@@ -419,6 +438,11 @@ module tfm_num
       &  p%thermcond(n), p%thermcond(n-1),     &
       &  dz, p%thermcond(n)                    &
       )
+      call tfm_num_lin_interp(                 &
+      &  p%depth(n), p%depth(n-1),             &
+      &  p%age(n), p%age(n-1),                 &
+      &  dz, p%age(n)                          &
+      )
 
       ! new depth / height of the uppermost layer
       p%depth(n) = p%depth(n) + dz
@@ -431,6 +455,7 @@ module tfm_num
       p%liquidwater(nz+1:np) = -9999.9
       p%heatcap(nz+1:np)     = -9999.9
       p%thermcond(nz+1:np)   = -9999.9
+      p%age(nz+1:np)         = -9999.9
     end if
   end subroutine tfm_num_surface
 
@@ -452,7 +477,7 @@ module tfm_num
     implicit none
 
     integer, intent(in)                             :: nz
-    real(prec), dimension(6,nz), intent(in), target :: props
+    real(prec), dimension(7,nz), intent(in), target :: props
     type(sim_props), intent(inout)                  :: p
 
     p%depth       => props(1,:)
@@ -461,5 +486,18 @@ module tfm_num
     p%heatcap     => props(4,:)
     p%thermcond   => props(5,:)
     p%liquidwater => props(6,:)
+    p%age         => props(7,:)
   end subroutine tfm_num_assign
+
+
+  function tfm_num_age(nz, dt, age) result (n_age)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz)             :: n_age
+
+    n_age = age + dt
+  end function tfm_num_age
 end module tfm_num

@@ -6,22 +6,77 @@ module tfm_density
   contains
 
 
-  subroutine tfm_density_HLtype(nz, dt, comp_accumulation, stage1_params, &
-    & stage2_params, temperature, density, d_density)
+  function tfm_density_depth(nz, depth, density, d_density) result(d_depth)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: d_density
+
+    real(prec), dimension(nz) :: d_depth
+
+    real(prec), dimension(nz) :: dz
+    real(prec), dimension(nz) :: ddz
+    integer                   :: n
+
+    dz(1) = 0.0
+    dz(2:nz) = (depth(2:nz) - depth(1:nz-1))
+    ddz = (dz * (density / (density + d_density))) - dz
+
+    d_depth(1) = 0.0
+    do n = 2, nz, 1
+      d_depth(n) = d_depth(n-1) + ddz(n)
+    end do
+  end function tfm_density_depth
+
+
+  subroutine tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    implicit none
+
+    integer, intent(in)                      :: nz
+    real(prec), dimension(nz), intent(in)    :: depth
+    real(prec), dimension(nz), intent(in)    :: density
+    real(prec), dimension(nz), intent(in)    :: age
+    real(prec), dimension(nz), intent(inout) :: mean_acc
+
+    integer :: n
+
+    mean_acc(nz) = 0.0
+    do n = nz - 1, 1, -1
+      mean_acc(n) = (depth(n+1) - depth(n)) * (density(n) / WATER_DENSITY)
+      mean_acc(n) = mean_acc(n) + mean_acc(n+1)
+    end do
+
+    mean_acc(1:nz-1) = mean_acc(1:nz-1) / (age(1:nz-1) / SECONDS_YEAR)
+  end subroutine tfm_density_mean_acc
+
+
+  subroutine tfm_density_HLtype(nz, dt, stage1_params, &
+    & stage2_params, depth, temperature, density, age, d_density)
     implicit none
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), intent(in)                :: comp_accumulation
     real(prec), dimension(3), intent(in)  :: stage1_params
     real(prec), dimension(3), intent(in)  :: stage2_params
+    real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: temperature
     real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz), intent(inout) :: d_density
 
+    real(prec), dimension(nz) :: mean_acc
+
     integer                   :: n
     real(prec), dimension(nz) :: c
+
+
+    ! computation of the mean accumulation rate 
+    ! over the lifetime of the firn parcel (kg m-1 a-1 m-2)
+    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    mean_acc = mean_acc * WATER_DENSITY
 
     ! boundary between first and seconds stage
     do n = nz, 1, -1
@@ -30,7 +85,7 @@ module tfm_density
       if ( density(n) < 550.0 ) then
         c(n) = (                                                   &
         &  stage1_params(1)                                        &
-        &  * (comp_accumulation**stage1_params(2))                 &
+        &  * (mean_acc(n)**stage1_params(2))                       &
         &  * ACC_GRAVITY                                           &
         &  * exp(-stage1_params(3) / (GAS_CONST * temperature(n))) &
         )
@@ -39,12 +94,11 @@ module tfm_density
       else if ( density(n) >= 550.0 ) then
         c(n) = (                                                   &
         &  stage2_params(1)                                        &
-        &  * (comp_accumulation**stage2_params(2))                 &
+        &  * (mean_acc(n)**stage2_params(2))                       &
         &  * ACC_GRAVITY                                           &
         &  * exp(-stage2_params(3) / (GAS_CONST * temperature(n))) &
         )
       end if
-
     end do
     
     ! density change
@@ -52,51 +106,8 @@ module tfm_density
   end subroutine tfm_density_HLtype
 
 
-  !subroutine tfm_density_HLtype(nz, dt, comp_accumulation, stage1_params, &
-  !  & stage2_params, temperature, density, d_density)
-  !  implicit none
-
-  !  integer, intent(in)                   :: nz
-  !  real(prec), intent(in)                :: dt
-  !  real(prec), intent(in)                :: comp_accumulation
-  !  real(prec), dimension(3), intent(in)  :: stage1_params
-  !  real(prec), dimension(3), intent(in)  :: stage2_params
-  !  real(prec), dimension(nz), intent(in) :: temperature
-  !  real(prec), dimension(nz), intent(in) :: density
-
-  !  real(prec), dimension(nz), intent(inout) :: d_density
-
-  !  integer                   :: n
-  !  real(prec), dimension(nz) :: c
-
-  !  ! boundary between first and seconds stage
-  !  do n = nz, 1, -1
-  !    if ( density(n) >= 550.0 ) EXIT
-  !  end do
-
-  !  ! first stage
-  !  c(n:nz) = (                                                   &
-  !  &  stage1_params(1)                                           &
-  !  &  * (comp_accumulation**stage1_params(2))                    &
-  !  &  * ACC_GRAVITY                                              &
-  !  &  * exp(-stage1_params(3) / (GAS_CONST * temperature(n:nz))) &
-  !  )
-
-  !  ! seconds stage
-  !  c(1:n-1) = (                                                   &
-  !  &  stage2_params(1)                                            &
-  !  &  * (comp_accumulation**stage2_params(2))                     &
-  !  &  * ACC_GRAVITY                                               &
-  !  &  * exp(-stage2_params(3) / (GAS_CONST * temperature(1:n-1))) &
-  !  )
-  !  
-  !  ! density change
-  !  d_density = ((dt / SECONDS_YEAR) * (c * (ICE_DENSITY - density)))
-  !end subroutine tfm_density_HLtype
-
-
-  function tfm_density_medley2020(nz, dt, accumulation, &
-    & depth, density, temperature) result(d_density)
+  function tfm_density_medley2020(nz, dt, depth, density, temperature, &
+    & age) result(d_density)
     implicit none
 
     ! first stage parameters
@@ -114,16 +125,15 @@ module tfm_density
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), intent(in)                :: accumulation
     real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz) :: d_density
 
-    integer    :: n
-    real(prec) :: comp_accumulation
-    real(prec) :: mean_temperature
+    integer                   :: n
+    real(prec)                :: mean_temperature
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -135,25 +145,22 @@ module tfm_density
     a0 = 0.07 * exp(EG / (GAS_CONST * mean_temperature))
     a1 = 0.03 * exp(EG / (GAS_CONST * mean_temperature))
 
-    ! change accumulation to (kg a-1 m-2)
-    comp_accumulation = accumulation * SECONDS_YEAR * WATER_DENSITY
-    if ( comp_accumulation < 0.0 ) comp_accumulation = 0.0
-
     ! call Herron & Langway model
     call tfm_density_HLtype(  &
     &  nz, dt,                &
-    &  comp_accumulation,     &
     &  (/ a0, ALPHA0, EC0 /), &
     &  (/ a1, ALPHA1, EC1 /), &
+    &  depth,                 &
     &  temperature,           &
     &  density,               &
+    &  age,                   &
     &  d_density              &
     )
   end function tfm_density_medley2020
 
 
-  function tfm_density_herron1980(nz, dt, accumulation, depth, density, &
-    & temperature) result(d_density)
+  function tfm_density_herron1980(nz, dt, depth, density, temperature, &
+    & age) result(d_density)
     implicit none
 
     ! first stage parameters
@@ -168,36 +175,29 @@ module tfm_density
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), intent(in)                :: accumulation
     real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz) :: d_density
-
-    real(prec) :: comp_accumulation, dummy
-
-    dummy = depth(1)
-
-    ! change accumulation to (m weq. a-1)
-    comp_accumulation = accumulation * SECONDS_YEAR
-    if ( comp_accumulation < 0.0 ) comp_accumulation = 0.0
 
     ! call Herron & Langway model
     call tfm_density_HLtype(  &
     &  nz, dt,                &
-    &  comp_accumulation,     &
     &  (/ A0, ALPHA0, EC0 /), &
     &  (/ A1, ALPHA1, EC1 /), &
+    &  depth,                 &
     &  temperature,           &
     &  density,               &
+    &  age,                   &
     &  d_density              &
     )
   end function tfm_density_herron1980
 
 
-  function tfm_density_arthern2010(nz, dt, accumulation, depth, &
-    density, temperature) result(d_density)
+  function tfm_density_arthern2010(nz, dt, depth, density, temperature, &
+    age) result(d_density)
     implicit none
 
     ! first stage parameters
@@ -213,22 +213,16 @@ module tfm_density
     ! further parameters
     real(prec), parameter :: EG = 42400.0
 
-    integer, intent(in)    :: nz
-    real(prec), intent(in) :: dt
-    real(prec), intent(in) :: accumulation
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
     real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz) :: d_density
-
-    integer    :: n
-    real(prec) :: comp_accumulation
-    real(prec) :: mean_temperature
-
-    ! change accumulation to (kg a-1 m-2)
-    comp_accumulation = accumulation * SECONDS_YEAR * WATER_DENSITY
-    if ( comp_accumulation < 0.0 ) comp_accumulation = 0.0
+    real(prec)                :: mean_temperature
+    integer                   :: n
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -243,34 +237,34 @@ module tfm_density
     ! call Herron & Langway model
     call tfm_density_HLtype(  &
     &  nz, dt,                &
-    &  comp_accumulation,     &
     &  (/ a0, ALPHA0, EC0 /), &
     &  (/ a1, ALPHA1, EC1 /), &
+    &  depth,                 &
     &  temperature,           &
     &  density,               &
+    &  age,                   &
     &  d_density              &
     )
   end function tfm_density_arthern2010
 
 
-  function tfm_density_ligtenberg2011(nz, dt, accumulation, depth, &
-    & density, temperature) result(d_density)
+  function tfm_density_ligtenberg2011(nz, dt, depth, density, temperature, &
+    & age) result(d_density)
     implicit none
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), intent(in)                :: accumulation
     real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz) :: d_density
+    real(prec), dimension(nz) :: mean_acc
+    integer                   :: n
 
-    integer    :: n
-    real(prec) :: comp_accumulation
-
-    d_density = tfm_density_arthern2010(nz, dt, accumulation, depth, &
-      & density, temperature)
+    d_density = tfm_density_arthern2010(nz, dt, depth, density, &
+      & temperature, age)
 
     ! boundary between first and seconds stage
     do n = nz, 1, -1
@@ -278,22 +272,22 @@ module tfm_density
     end do
 
     ! change accumulation to (kg a-1 m-2)
-    comp_accumulation = accumulation * SECONDS_YEAR * WATER_DENSITY
-    if ( comp_accumulation < 0.0 ) comp_accumulation = 0.0
+    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    mean_acc = mean_acc * WATER_DENSITY
 
-    d_density(n:nz) = (                             &
-    &  d_density(n:nz)                              &
-    &  * (1.435 - (0.151 * log(comp_accumulation))) &
+    d_density(n+1:nz-1) = (                             &
+    &  d_density(n+1:nz-1)                              &
+    &  * (1.435 - (0.151 * log(mean_acc(n+1:nz-1))))    &
     )
-    d_density(1:n-1) = (                            &
-    &  d_density(1:nz)                              &
-    &  * (2.366 - (0.293 * log(comp_accumulation))) &
+    d_density(1:n) = (                              &
+    &  d_density(1:n)                               &
+    &  * (2.366 - (0.293 * log(mean_acc(1:n))))     &
     )
   end function tfm_density_ligtenberg2011
 
 
-  function tfm_density_simonsen2013(nz, dt, accumulation, depth, &
-    & density, temperature) result(d_density)
+  function tfm_density_simonsen2013(nz, dt, depth, density, temperature, &
+    & age) result(d_density)
     implicit none
 
     ! fist stage parameters (as implemented in CFM)
@@ -304,19 +298,19 @@ module tfm_density
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), intent(in)                :: accumulation
     real(prec), dimension(nz), intent(in) :: depth
     real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
 
     real(prec), dimension(nz) :: d_density
 
-    integer    :: n
-    real(prec) :: comp_accumulation
-    real(prec) :: mean_temperature
+    integer                   :: n
+    real(prec), dimension(nz) :: mean_acc
+    real(prec)                :: mean_temperature
 
-    d_density = tfm_density_arthern2010(nz, dt, accumulation, depth, &
-      & density, temperature)
+    d_density = tfm_density_arthern2010(nz, dt, depth, density, &
+      & temperature, age)
 
     ! boundary between first and seconds stage
     do n = nz, 1, -1
@@ -324,8 +318,8 @@ module tfm_density
     end do
 
     ! change accumulation to (kg a-1 m-2)
-    comp_accumulation = accumulation * SECONDS_YEAR * WATER_DENSITY
-    if ( comp_accumulation < 0.0 ) comp_accumulation = 0.0
+    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    mean_acc = mean_acc * WATER_DENSITY
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -333,10 +327,10 @@ module tfm_density
     end do
     mean_temperature = temperature(n)
 
-    d_density(n:nz) = F0 * d_density(n:nz)
-    d_density(1:n-1) = (                               &
-    &  d_density(1:n-1)                                &
-    &  * (61.7 / (comp_accumulation**0.5))             &
+    d_density(n+1:nz-1) = F0 * d_density(n+1:nz-1)
+    d_density(1:n) = (                                 &
+    &  d_density(1:n)                                  &
+    &  * (61.7 / (mean_acc(1:n)**0.5))                 &
     &  * exp(-3800.0 / (GAS_CONST * mean_temperature)) &
     )
   end function tfm_density_simonsen2013
