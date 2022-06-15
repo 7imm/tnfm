@@ -145,8 +145,6 @@ module tfm_num
         models%dens_model => tfm_density_helsen2008
       else if ( solve_density == 'breant2017' ) then
         models%dens_model => tfm_density_breant2017
-      else if ( solve_density == 'salamantin2007' ) then
-        models%dens_model => tfm_density_salamantin2007
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
