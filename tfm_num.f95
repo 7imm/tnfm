@@ -29,7 +29,7 @@ module tfm_num
 
   ! interface for densification function
   interface
-    function density_inter(nz, dz, depth, density, temperature, age)
+    function density_inter(nz, dz, depth, density, temperature, age, grain_radius)
       use settings
       implicit none
 
@@ -39,6 +39,7 @@ module tfm_num
       real(prec), dimension(nz), intent(in) :: density
       real(prec), dimension(nz), intent(in) :: temperature
       real(prec), dimension(nz), intent(in) :: age
+      real(prec), dimension(nz), intent(in) :: grain_radius
 
       real(prec), dimension(nz) :: density_inter
     end function density_inter
@@ -52,8 +53,8 @@ module tfm_num
       use settings
       implicit none
 
-      integer, intent(in) :: nz
-      real(prec), intent(in) :: dt
+      integer, intent(in)                   :: nz
+      real(prec), intent(in)                :: dt
       real(prec), dimension(nz), intent(in) :: depth
       real(prec), dimension(nz), intent(in) :: density
       real(prec), dimension(nz), intent(in) :: temperature 
@@ -136,6 +137,16 @@ module tfm_num
         models%dens_model => tfm_density_ligtenberg2011
       else if ( solve_density == 'simonsen2013' ) then
         models%dens_model => tfm_density_simonsen2013
+      else if ( solve_density == 'arthern1998' ) then
+        models%dens_model => tfm_density_arthern1998
+      else if ( solve_density == 'li2003' ) then
+        models%dens_model => tfm_density_li2003
+      else if ( solve_density == 'helsen2008' ) then
+        models%dens_model => tfm_density_helsen2008
+      else if ( solve_density == 'breant2017' ) then
+        models%dens_model => tfm_density_breant2017
+      else if ( solve_density == 'salamantin2007' ) then
+        models%dens_model => tfm_density_salamantin2007
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -209,7 +220,7 @@ module tfm_num
     real(prec), intent(in) :: dt
 
     type(sim_models), intent(in)               :: models
-    real(prec), dimension(7,nz), intent(inout) :: props
+    real(prec), dimension(8,nz), intent(inout) :: props
     real(prec), intent(inout), optional        :: runoff
 
     real(prec), intent(in), optional :: liquid_acc
@@ -247,7 +258,7 @@ module tfm_num
 
     ! Picard loop
     n = 0
-    do while ( (maxval(abs(residuum)) > 1.0e-2) .and. (n < 10000) )
+    do while ( (maxval(abs(residuum)) > 1.0e-2) .and. (n < 100) )
       
       ! density model
       if ( associated(models%dens_model) ) then
@@ -256,7 +267,8 @@ module tfm_num
         &  depth=n_depth,                         &
         &  density=n_density,                     &
         &  temperature=n_temperature,             &
-        &  age=n_age                              &
+        &  age=n_age,                             &
+        &  grain_radius=p%grain_radius            &
         )
 
         ! There is the possibility that the residuum of the density is
@@ -267,7 +279,8 @@ module tfm_num
         ! to zero, (which is not ideal).
         dens_residuum = abs(n_density - (p%density + d_density))
         do m = 1, nz, 1
-          if ( floor(n_density(m)) == 550 ) dens_residuum(m) = 0.0
+          if ( floor(n_density(m)) == 550              ) dens_residuum(m) = 0.0
+          if ( floor(n_density(m)) == CLOSEOFF_DENSITY ) dens_residuum(m) = 0.0
         end do
         residuum(1) = maxval(dens_residuum)
       end if
@@ -340,7 +353,7 @@ module tfm_num
     type(sim_models), intent(in)         :: models
 
     integer, intent(inout)                     :: nz
-    real(prec), dimension(7,np), intent(inout) :: props
+    real(prec), dimension(8,np), intent(inout) :: props
 
     type(sim_props) :: p
     integer         :: n
@@ -477,16 +490,17 @@ module tfm_num
     implicit none
 
     integer, intent(in)                             :: nz
-    real(prec), dimension(7,nz), intent(in), target :: props
+    real(prec), dimension(8,nz), intent(in), target :: props
     type(sim_props), intent(inout)                  :: p
 
-    p%depth       => props(1,:)
-    p%density     => props(2,:)
-    p%temperature => props(3,:)
-    p%heatcap     => props(4,:)
-    p%thermcond   => props(5,:)
-    p%liquidwater => props(6,:)
-    p%age         => props(7,:)
+    p%depth        => props(1,:)
+    p%density      => props(2,:)
+    p%temperature  => props(3,:)
+    p%heatcap      => props(4,:)
+    p%thermcond    => props(5,:)
+    p%liquidwater  => props(6,:)
+    p%age          => props(7,:)
+    p%grain_radius => props(8,:)
   end subroutine tfm_num_assign
 
 

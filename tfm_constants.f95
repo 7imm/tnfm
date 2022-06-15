@@ -28,4 +28,19 @@ module tfm_constants
 
   ! melt tempreature (K)
   real(prec), parameter :: MELT_TEMP = 273.15_prec
+
+  ! Boltzmann constant
+  real(prec), parameter :: BOLTZMANN = 1.380649e-23_prec
+
+  ! ice flow exponent
+  real(prec), parameter :: ICE_N = 3.0_prec
+
+  ! bubble close off density
+  real(prec), parameter :: CLOSEOFF_DENSITY = 834.0_prec
+
+  ! tempreature offset to convert K and C
+  real(prec), parameter :: TEMP_OFFSET = 273.15_prec
+
+  ! pi
+  real(prec), parameter :: PI = 4.0d0 * datan(1.d0)
 end module tfm_constants

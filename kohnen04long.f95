@@ -4,8 +4,8 @@ program kohnen03
   use tfm_tools
   implicit none
 
-  character(len=*), parameter :: INIT_INP = '../kohnen04init.dat'
-  character(len=*), parameter :: FORC_INP = '../kohnen04longForcing.dat'
+  character(len=*), parameter :: INIT_INP = './kohnen04init.dat'
+  character(len=*), parameter :: FORC_INP = './kohnen04longForcing.dat'
   real(prec), parameter       :: DT = 3600.0_prec * 24.0_prec * (365.0_prec / 12.0_prec)
 
   real(prec), dimension(:,:), allocatable :: forcing
@@ -45,9 +45,11 @@ program kohnen03
   forcing(6,:) = 0.0_prec
   
   ! init import
-  allocate(props(7,np))
+  allocate(props(8,np))
+  props = -999999.9
   call kohnen03_import_init(INIT_INP, nz, props(:,1:nz))
   props(6,:) = 0.0_prec
+  props(8,:) = 0.0005_prec
 
   ! output file
   open(333, file='kohnen04.out', status='replace', action='write')
@@ -77,6 +79,8 @@ program kohnen03
     &  liquid_acc=forcing(6,t) &
     )
 
+    !if ( t == 7000 ) EXIT
+
   end do
 
   ! simple output
@@ -90,6 +94,7 @@ program kohnen03
 
   ! feedback
   call system_clock(toc, rate)
+  print *, ''
   write(*, '(a,f10.2,a)') 'time elapsed: ', real(toc - tic) / real(rate), ' s'
 
   ! memory deallocation
@@ -103,7 +108,7 @@ subroutine kohnen03_import_init(init_file, nz, props)
 
   character(len=*), intent(in)               :: init_file
   integer, intent(in)                        :: nz
-  real(prec), dimension(7,nz), intent(inout) :: props
+  real(prec), dimension(8,nz), intent(inout) :: props
 
   integer n
 

@@ -70,7 +70,7 @@ module tfm_output
     type(out_ncid), intent(in)              :: ncid
     integer, intent(inout)                  :: t
     integer, intent(in)                     :: nz
-    real(prec), dimension(6,nz), intent(in) :: props
+    real(prec), dimension(8,nz), intent(in) :: props
     real(prec), intent(in)                  :: time
     
     integer :: stat
