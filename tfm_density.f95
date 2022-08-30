@@ -633,6 +633,225 @@ module tfm_density_fischmeisterArzt
 end module tfm_density_fischmeisterArzt
 
 
+module tfm_density_gagliardini
+  use settings
+  use tfm_constants
+  use tfm_density_tools
+
+  real(prec), parameter :: STAGE_DIV = 0.81_prec
+
+  interface
+    function invariant_inter(nz, param_a, param_b, strain_rate_inp) &
+      & result(invariant)
+      use settings
+      implicit none
+
+      integer, intent(in)                             :: nz
+      real(prec), dimension(nz), intent(in)           :: param_a
+      real(prec), dimension(nz), intent(in)           :: param_b
+      real(prec), dimension(nz), intent(in), optional :: strain_rate_inp
+
+      real(prec), dimension(nz) :: invariant
+    end function invariant_inter
+  end interface
+
+  
+  interface
+    function viscosity_inter(nz, param, rate_factor, invariant) &
+      & result(viscosity)
+      use settings
+      implicit none
+
+      integer, intent(in)                   :: nz
+      real(prec), dimension(nz), intent(in) :: param
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: viscosity
+    end function viscosity_inter
+  end interface
+
+
+  contains
+
+
+  function tfm_density_gagliardiniParamA0(density) result(param_a0)
+    implicit none
+
+    real(prec), intent(in) :: density
+    real(prec)             :: param_a0
+    real(prec)             :: rel_density
+
+    rel_density = density / ICE_DENSITY
+
+    param_a0 = (                                         &
+    &  (1.0 + ((2.0 / 3.0) * (1.0 - rel_density)))       &
+    &  * (rel_density)**((-2.0 * ICE_N) / (ICE_N + 1.0)) &
+    )
+  end function tfm_density_gagliardiniParamA0
+
+
+  function tfm_density_gagliardiniParamB0(density) result(param_b0)
+    implicit none
+
+    real(prec), intent(in) :: density
+    real(prec)             :: param_b0
+    real(prec)             :: rel_density
+    
+    rel_density = density / ICE_DENSITY
+
+    param_b0 = (                                                  &
+    &  (3.0 / 4.0)                                                &
+    &  * (                                                        &
+    &    ((1.0 - rel_density)**(1.0 / ICE_N))                     &
+    &    / (ICE_N * (1.0 - ((1.0 - rel_density)**(1.0 / ICE_N)))) &
+    &  )**((2.0 * ICE_N) / (ICE_N + 1.0))                         &
+    )
+  end function tfm_density_gagliardiniParamB0
+
+
+  function tfm_density_gagliardiniRate(nz, temperature) &
+    & result(rate_factor)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), dimension(nz), intent(in) :: temperature
+
+    integer                   :: n
+    real(prec), dimension(nz) :: rate_factor
+
+    ! parameters (values from Greve & Blatter, 2009)
+    real(prec) :: TEMP_DIV = 263.15_prec
+    real(prec) :: PRE_FACTOR_LOW  = 3.985e-13_prec
+    real(prec) :: PRE_FACTOR_HIGH = 1.916e3_prec
+    real(prec) :: ACTIVATION_ENERGY_LOW  =  60000.0_prec
+    real(prec) :: ACTIVATION_ENERGY_HIGH = 139000.0_prec
+
+    do n = 1, nz, 1
+      if ( temperature(n) <= TEMP_DIV ) then
+        
+        rate_factor(n) = tfm_density_arrhenius( &
+        &  1,                                   &
+        &  PRE_FACTOR_LOW,                      &
+        &  ACTIVATION_ENERGY_LOW,               &
+        &  temperature(n)                       &
+        &)
+      else if ( temperature(n) > TEMP_DIV ) then
+
+        rate_factor(n) = tfm_density_arrhenius( &
+        &  1,                                   &
+        &  PRE_FACTOR_HIGH,                     &
+        &  ACTIVATION_ENERGY_HIGH,              &
+        &  temperature(n)                       &
+        &)
+
+      else
+
+        ! catch exception
+        print *, 'module: tfm_density_gagliardini'
+        print *, 'function: tfm_density_gagliardiniRate'
+        print *, ''
+        print *, 'It seems there are irregular temperature values!'
+        print *, ''
+        print *, 'Stopping right here!'
+        STOP
+
+      end if
+    end do
+
+    rate_factor = rate_factor**(-1.0_prec / ICE_N)
+  end function tfm_density_gagliardiniRate
+
+  
+  function tfm_density_gagliardiniSolve(nz, density, stress, dt, param_a, &
+    & param_b, rate_factor, invariant_func, shear_visco_func, bulk_visco_func) &
+    & result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: stress
+    real(prec), dimension(nz), intent(in) :: param_a
+    real(prec), dimension(nz), intent(in) :: param_b
+    real(prec), dimension(nz), intent(in) :: rate_factor
+
+    procedure(invariant_inter) :: invariant_func
+    procedure(viscosity_inter) :: shear_visco_func
+    procedure(viscosity_inter) :: bulk_visco_func
+
+    real(prec), dimension(nz) :: d_density 
+
+    integer                   :: n
+    integer                   :: iter
+    real(prec), dimension(nz) :: strain_rate
+    real(prec), dimension(nz) :: d_density_prev
+    real(prec), dimension(nz) :: invariant
+    real(prec), dimension(nz) :: bulk_viscosity
+    real(prec), dimension(nz) :: shear_viscosity
+
+    integer, parameter :: MAX_ITER = 1000
+
+
+    ! first guess of the invariant
+    invariant = invariant_func(nz, param_a, param_b)
+
+    ! viscosities
+    shear_viscosity = shear_visco_func(    &
+    &  nz, param_a, rate_factor, invariant &
+    &)
+    bulk_viscosity = bulk_visco_func(      &
+    &  nz, param_b, rate_factor, invariant & 
+    &)
+
+    ! strain rate
+    strain_rate = (                                                             &
+    &  (1.0_prec/ (((4.0_prec / 3.0_prec) * shear_viscosity) + bulk_viscosity)) &
+    &  * stress                                                                 &
+    &)
+
+    d_density      = -999999.9
+    d_density_prev = +999999.9
+    iter           = 0
+
+    do while ( (maxval(abs(d_density - d_density_prev)) > 1.0e-2) .or. (iter == MAX_ITER) )
+
+      ! first guess of the invariant
+      invariant = invariant_func( &
+      &  nz, param_a, param_b, strain_rate          &
+      &)
+
+      ! viscosities
+      shear_viscosity = shear_visco_func(    &
+      &  nz, param_a, rate_factor, invariant &
+      &)
+      bulk_viscosity = bulk_visco_func(      &
+      &  nz, param_b, rate_factor, invariant &
+      &)
+
+      ! strain rate
+      strain_rate = (                                                             &
+      &  (1.0_prec/ (((4.0_prec / 3.0_prec) * shear_viscosity) + bulk_viscosity)) &
+      &  * stress                                                                 &
+      &)
+
+      ! densification
+      d_density_prev = 1.0_prec * d_density
+      d_density = dt * strain_rate * density
+
+      iter = iter + 1
+    end do
+
+    ! avoid the singularity at ice density
+    do n = 1, nz, 1
+      if ( (density(n) + d_density(n)) > (ICE_DENSITY - 10.0e-5) ) then
+        d_density(n) = (ICE_DENSITY - density(n)) - 10.0e-5
+      end if
+    end do
+  end function tfm_density_gagliardiniSolve
+end module tfm_density_gagliardini
+
+
 
 module tfm_density
   use settings
@@ -642,7 +861,9 @@ module tfm_density
   use tfm_density_stress
   use tfm_density_fischmeisterArzt
   use tfm_density_processes
+  use tfm_density_gagliardini
   implicit none
+
 
   contains
 
@@ -670,6 +891,489 @@ module tfm_density
       d_depth(n) = d_depth(n-1) + ddz(n)
     end do
   end function tfm_density_depth
+
+
+  function tfm_density_gagliardini1998(nz, dt, depth, density, temperature, &
+    & age, grain_radius) result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz), intent(in) :: grain_radius
+
+    integer                   :: n
+    real(prec)                :: rel_density
+    real(prec), dimension(nz) :: d_density
+    real(prec), dimension(nz) :: param_a
+    real(prec), dimension(nz) :: param_b
+    real(prec), dimension(nz) :: rate_factor
+    real(prec), dimension(nz) :: stress
+
+    ! doing nothing
+    call tfm_density_do_nothing(nz, age)
+    call tfm_density_do_nothing(nz, grain_radius)
+
+    ! stress
+    call tfm_density_computeStress(nz, depth, density, stress)
+
+    ! density dependent parameter of the model as defined by Greve & BLatter 2009
+    do n = 1, nz, 1
+      
+      rel_density = density(n) / ICE_DENSITY
+      
+      !if ( rel_density < 0.5 ) then
+      !  param_b(n) = exp(                &
+      !  &  (451.63 * (rel_density**2.0)) &
+      !  &  - (474.34 * rel_density)      &
+      !  &  + 128.12                      &
+      !  )
+
+      !else if ( (rel_density >= 0.5) .and. (rel_density < 0.785) ) then
+      !  param_b(n) = exp((-17.15 * rel_density) + 12.42)
+
+      !else if ( (rel_density >= 0.785) .and. (rel_density < 1.0) ) then
+      !  param_b(n) = tfm_density_gagliardiniParamB0(density(n))
+
+      if ( (rel_density > 0.0) .and. (rel_density < 0.785) ) then
+        param_a(n) = exp((-19.67 * rel_density) + 15.94)
+        param_b(n) = exp((-27.65 * rel_density) + 20.37)
+
+      else if ( (rel_density >= 0.785) .and. (rel_density < 1.0) ) then
+        param_a(n) = tfm_density_gagliardiniParamA0(density(n))
+        param_b(n) = tfm_density_gagliardiniParamB0(density(n))
+
+      else
+        ! catch exception
+        print *, 'module: tfm_density'
+        print *, 'function: tfm_density_gagliardini1998'
+        print *, ''
+        print *, 'It seems the density exceeds the range of valid '
+        print *, 'values at some point!'
+        print *, ''
+        print *, 'Stopping right here!'
+        STOP
+
+      end if
+
+      !param_a(n) = (                                    &
+      !&  param_b(n) * (                                 &
+      !&    tfm_density_gagliardiniParamA0(density(n))   &
+      !&    / tfm_density_gagliardiniParamB0(density(n)) &
+      !&  )                                              &
+      !)
+
+    end do
+
+    ! temperature dependent associated rate factor
+    rate_factor = tfm_density_gagliardiniRate(nz, temperature)
+
+    ! solving for the density change
+    d_density = tfm_density_gagliardiniSolve(                  &
+    &  nz, density, stress, dt, param_a, param_b, rate_factor, &
+    &  invariant_func, visco_func, visco_func                  &
+    )
+
+    contains
+
+    function invariant_func(nz, param_a, param_b, &
+      & strain_rate_inp) result(invariant)
+      implicit none
+
+      integer, intent(in)                             :: nz
+      real(prec), dimension(nz), intent(in)           :: param_a
+      real(prec), dimension(nz), intent(in)           :: param_b
+      real(prec), dimension(nz), intent(in), optional :: strain_rate_inp
+
+      real(prec), dimension(nz) :: invariant
+      real(prec), dimension(nz) :: strain_rate
+
+      if ( present(strain_rate_inp) ) then
+        strain_rate = strain_rate_inp
+      else
+        strain_rate = 1.0e-10_prec
+      end if
+
+      invariant = (                                           &
+      &  strain_rate                                          & 
+      &  * (((3.0 / (4.0 * param_a)) + (1.0 / param_b))**0.5) &
+      )
+    end function invariant_func
+
+
+    function visco_func(nz, param, rate_factor, invariant) &
+      & result(viscosity)
+
+      integer, intent(in) :: nz
+      real(prec), dimension(nz), intent(in) :: param
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: viscosity
+
+      viscosity = (                                        &
+      &  (1.0_prec / param)                                &
+      &  * rate_factor                                     &
+      &  * (invariant**(-(1.0_prec - (1.0_prec / ICE_N)))) &
+      )
+    end function visco_func
+  end function tfm_density_gagliardini1998
+
+
+  function tfm_density_timmsfit(nz, dt, depth, density, temperature, &
+    & age, grain_radius) result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz), intent(in) :: grain_radius
+
+    integer                   :: n
+    real(prec)                :: rel_density
+    real(prec), dimension(nz) :: d_density
+    real(prec), dimension(nz) :: param_a
+    real(prec), dimension(nz) :: param_b
+    real(prec), dimension(nz) :: rate_factor
+    real(prec), dimension(nz) :: stress
+
+
+    ! doing nothing
+    call tfm_density_do_nothing(nz, age)
+    call tfm_density_do_nothing(nz, grain_radius)
+
+    ! stress
+    call tfm_density_computeStress(nz, depth, density, stress)
+
+    ! density dependent parameter of the model as defined by Greve & BLatter 2009
+    do n = 1, nz, 1
+      rel_density = density(n) / ICE_DENSITY
+
+      if ( (rel_density > 0.0) .and. (rel_density <= 0.79) ) then
+        param_a(n) = exp(                 &
+        &  24.60215                       &
+        &  - (58.573530 * rel_density)    &
+        &  - (-35.5 * (rel_density**2.0)) &
+        )
+        param_b(n) = (                                    &
+        &  (                                              &
+        &    tfm_density_gagliardiniParamB0(density(n))   &
+        &    / tfm_density_gagliardiniParamA0(density(n)) &
+        &  ) * param_a(n)                                 &
+        )
+
+      else if ( (rel_density > 0.79) .and. (rel_density < 1.0) ) then
+        param_a(n) = tfm_density_gagliardiniParamA0(density(n))
+        param_b(n) = tfm_density_gagliardiniParamB0(density(n))
+
+      else
+        ! catch exception
+        print *, 'module: tfm_density'
+        print *, 'function: tfm_density_timmsfit'
+        print *, ''
+        print *, 'It seems the density exceeds the range of valid '
+        print *, 'values at some point!'
+        print *, ''
+        print *, 'Stopping right here!'
+        STOP
+
+      end if
+    end do
+
+    ! temperature dependent associated rate factor
+    rate_factor = tfm_density_gagliardiniRate(nz, temperature)
+
+    ! solving for the density change
+    d_density = tfm_density_gagliardiniSolve(                  &
+    &  nz, density, stress, dt, param_a, param_b, rate_factor, &
+    &  invariant_func, visco_func, visco_func                  &
+    )
+
+    contains
+
+    function invariant_func(nz, param_a, param_b, &
+      & strain_rate_inp) result(invariant)
+      implicit none
+
+      integer, intent(in)                             :: nz
+      real(prec), dimension(nz), intent(in)           :: param_a
+      real(prec), dimension(nz), intent(in)           :: param_b
+      real(prec), dimension(nz), intent(in), optional :: strain_rate_inp
+
+      real(prec), dimension(nz) :: invariant
+      real(prec), dimension(nz) :: strain_rate
+
+      if ( present(strain_rate_inp) ) then
+        strain_rate = strain_rate_inp
+      else
+        strain_rate = 1.0e-10_prec
+      end if
+
+      invariant = (                                                   &
+      &  strain_rate                                                  &
+      &  * (((1.0 / (3.0 * param_a)) + (1.0 / (4.0 * param_b)))**0.5) &
+      )
+    end function invariant_func
+
+
+    function visco_func(nz, param, rate_factor, invariant) &
+      & result(viscosity)
+
+      integer, intent(in) :: nz
+      real(prec), dimension(nz), intent(in) :: param
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: viscosity
+
+      viscosity = (                                        &
+      &  (1.0_prec / (2.0 * param))                        &
+      &  * rate_factor                                     &
+      &  * (invariant**(-(1.0_prec - (1.0_prec / ICE_N)))) &
+      )
+    end function visco_func
+  end function tfm_density_timmsfit
+
+
+  function tfm_density_greve2009(nz, dt, depth, density, temperature, &
+    & age, grain_radius) result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz), intent(in) :: grain_radius
+
+    integer                   :: n
+    real(prec)                :: rel_density
+    real(prec), dimension(nz) :: d_density
+    real(prec), dimension(nz) :: param_a
+    real(prec), dimension(nz) :: param_b
+    real(prec), dimension(nz) :: rate_factor
+    real(prec), dimension(nz) :: stress
+
+
+    ! doing nothing
+    call tfm_density_do_nothing(nz, age)
+    call tfm_density_do_nothing(nz, grain_radius)
+
+    ! stress
+    call tfm_density_computeStress(nz, depth, density, stress)
+
+    ! density dependent parameter of the model as defined by Greve & BLatter 2009
+    do n = 1, nz, 1
+      rel_density = density(n) / ICE_DENSITY
+
+      if ( (rel_density > 0.0) .and. (rel_density <= 0.81) ) then
+        param_a(n) = exp(13.22240 - (15.78652 * rel_density))
+        param_b(n) = exp(15.09371 - (20.46489 * rel_density))
+
+      else if ( (rel_density > 0.81) .and. (rel_density < 1.0) ) then
+        param_a(n) = tfm_density_gagliardiniParamA0(density(n))
+        param_b(n) = tfm_density_gagliardiniParamB0(density(n))
+
+      else
+        ! catch exception
+        print *, 'module: tfm_density'
+        print *, 'function: tfm_density_greve2009'
+        print *, ''
+        print *, 'It seems the density exceeds the range of valid '
+        print *, 'values at some point!'
+        print *, ''
+        print *, 'Stopping right here!'
+        STOP
+
+      end if
+    end do
+
+    ! temperature dependent associated rate factor
+    rate_factor = tfm_density_gagliardiniRate(nz, temperature)
+
+    ! solving for the density change
+    d_density = tfm_density_gagliardiniSolve(                  &
+    &  nz, density, stress, dt, param_a, param_b, rate_factor, &
+    &  invariant_func, visco_func, visco_func                  &
+    )
+
+    contains
+
+    function invariant_func(nz, param_a, param_b, &
+      & strain_rate_inp) result(invariant)
+      implicit none
+
+      integer, intent(in)                             :: nz
+      real(prec), dimension(nz), intent(in)           :: param_a
+      real(prec), dimension(nz), intent(in)           :: param_b
+      real(prec), dimension(nz), intent(in), optional :: strain_rate_inp
+
+      real(prec), dimension(nz) :: invariant
+      real(prec), dimension(nz) :: strain_rate
+
+      if ( present(strain_rate_inp) ) then
+        strain_rate = strain_rate_inp
+      else
+        strain_rate = 1.0e-10_prec
+      end if
+
+      invariant = (                                                   &
+      &  strain_rate                                                  &
+      &  * (((1.0 / (3.0 * param_a)) + (1.0 / (4.0 * param_b)))**0.5) &
+      )
+    end function invariant_func
+
+
+    function visco_func(nz, param, rate_factor, invariant) &
+      & result(viscosity)
+
+      integer, intent(in) :: nz
+      real(prec), dimension(nz), intent(in) :: param
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: viscosity
+
+      viscosity = (                                        &
+      &  (1.0_prec / (2.0 * param))                        &
+      &  * rate_factor                                     &
+      &  * (invariant**(-(1.0_prec - (1.0_prec / ICE_N)))) &
+      )
+    end function visco_func
+  end function tfm_density_greve2009
+
+
+  function tfm_density_zwinger2007(nz, dt, depth, density, temperature, &
+    & age, grain_radius) result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz), intent(in) :: grain_radius
+
+    integer                   :: n
+    real(prec)                :: rel_density
+    real(prec), dimension(nz) :: d_density
+    real(prec), dimension(nz) :: param_a
+    real(prec), dimension(nz) :: param_b
+    real(prec), dimension(nz) :: rate_factor
+    real(prec), dimension(nz) :: stress
+
+    ! doing nothing
+    call tfm_density_do_nothing(nz, age)
+    call tfm_density_do_nothing(nz, grain_radius)
+
+    ! stress
+    call tfm_density_computeStress(nz, depth, density, stress)
+
+    ! density dependent parameter of the model as defined by Greve & BLatter 2009
+    do n = 1, nz, 1
+      rel_density = density(n) / ICE_DENSITY
+
+      if ( (rel_density > 0.0) .and. (rel_density <= 0.81) ) then
+        param_a(n) = exp(13.22240 - (15.78652 * rel_density))
+        param_b(n) = exp(15.09371 - (20.46489 * rel_density))
+
+      else if ( (rel_density > 0.81) .and. (rel_density < 1.0) ) then
+        param_a(n) = tfm_density_gagliardiniParamA0(density(n))
+        param_b(n) = tfm_density_gagliardiniParamB0(density(n))
+ 
+      else
+        ! catch exception
+        print *, 'module: tfm_density'
+        print *, 'function: tfm_density_zwinger2007'
+        print *, ''
+        print *, 'It seems the density exceeds the range of valid '
+        print *, 'values at some point!'
+        print *, ''
+        print *, 'Stopping right here!'
+        STOP
+
+      end if
+    end do
+
+    ! temperature dependent associated rate factor
+    rate_factor = tfm_density_gagliardiniRate(nz, temperature)
+
+    ! solving for the density change
+    d_density = tfm_density_gagliardiniSolve(                  &
+    &  nz, density, stress, dt, param_a, param_b, rate_factor, &
+    &  invariant_func, shear_visco_func, bulk_visco_func       &
+    )
+
+    contains
+
+    function invariant_func(nz, param_a, param_b, &
+      & strain_rate_inp) result(invariant)
+      implicit none
+
+      integer, intent(in)                             :: nz
+      real(prec), dimension(nz), intent(in)           :: param_a
+      real(prec), dimension(nz), intent(in)           :: param_b
+      real(prec), dimension(nz), intent(in), optional :: strain_rate_inp
+
+      real(prec), dimension(nz) :: invariant
+      real(prec), dimension(nz) :: strain_rate
+
+      if ( present(strain_rate_inp) ) then
+        strain_rate = strain_rate_inp
+      else
+        strain_rate = 1.0e-10_prec
+      end if
+
+      invariant = (                                           &
+      &  strain_rate                                          &
+      &  * (((3.0 / (4.0 * param_a)) + (1.0 / param_b))**0.5) &
+      )
+    end function invariant_func
+
+
+    function shear_visco_func(nz, param_a, rate_factor, invariant) &
+      & result(shear_viscosity)
+
+      integer, intent(in) :: nz
+      real(prec), dimension(nz), intent(in) :: param_a
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: shear_viscosity
+
+      shear_viscosity = (                                  &
+      &  (2.0_prec / param_a)                              &
+      &  * rate_factor                                     &
+      &  * (invariant**(-(1.0_prec - (1.0_prec / ICE_N)))) &
+      )
+    end function shear_visco_func
+
+
+    function bulk_visco_func(nz, param_b, rate_factor, invariant) &
+      & result(bulk_viscosity)
+
+      integer, intent(in) :: nz
+      real(prec), dimension(nz), intent(in) :: param_b
+      real(prec), dimension(nz), intent(in) :: rate_factor
+      real(prec), dimension(nz), intent(in) :: invariant
+
+      real(prec), dimension(nz) :: bulk_viscosity
+
+      bulk_viscosity = (                                   &
+      &  (1.0_prec / param_b)                              &
+      &  * rate_factor                                     &
+      &  * (invariant**(-(1.0_prec - (1.0_prec / ICE_N)))) &
+      )
+    end function bulk_visco_func
+  end function tfm_density_zwinger2007
 
 
   function tfm_density_breant2017(nz, dt, depth, density, temperature, &

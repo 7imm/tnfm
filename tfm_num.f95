@@ -145,6 +145,14 @@ module tfm_num
         models%dens_model => tfm_density_helsen2008
       else if ( solve_density == 'breant2017' ) then
         models%dens_model => tfm_density_breant2017
+      else if ( solve_density == 'zwinger2007' ) then
+        models%dens_model => tfm_density_zwinger2007
+      else if ( solve_density == 'greve2009' ) then
+        models%dens_model => tfm_density_greve2009
+      else if ( solve_density == 'gagliardini1998' ) then
+        models%dens_model => tfm_density_gagliardini1998
+      else if ( solve_density == 'timmsfit' ) then
+        models%dens_model => tfm_density_timmsfit
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'

@@ -26,7 +26,7 @@ program kohnen03
 
   ! model initialization
   call tfm_num_modelinit(                    &
-  &  solve_density='arthern2010',            &
+  &  solve_density='timmsfit',               &
   &  solve_temperature='true',               &
   &  solve_heat_capacity='paterson1994',     &
   &  solve_thermal_conductivity='sturm2007', &
