@@ -2,6 +2,28 @@ module tfm_density_tools
   use settings
   use tfm_constants
   implicit none
+! ---------------------------------------------------------------------
+! Module: tfm_density_tools
+!
+! This module contains procedures commonly used by density related
+! functions and subroutines.
+!
+! Dependencies: settings, tfm_constants
+!
+! Interfaces:
+!   tfm_density_arrhenius: Interface for functions
+!                          "tfm_density_arrhenius_i" and
+!                          "tfm_density_arrhenius_n".
+!
+! Functions:
+!   tfm_density_arrhenius_i: Arrhenius equation for dimension 1.
+!   tfm_density_arrhenius_n: Arrhenius equation for dimension n.
+!
+! Subroutines:
+!   tfm_density_lin_interp: Simple linear interpolation.
+!   tfm_density_do_nothing: Does nothing to a given variable.
+!   tfm_density_bagmean: Bagmean from firn profile.
+! ---------------------------------------------------------------------
 
   interface tfm_density_arrhenius
     module procedure tfm_density_arrhenius_i, tfm_density_arrhenius_n
@@ -21,6 +43,24 @@ module tfm_density_tools
 
     integer    :: m
     real(prec) :: arrhenius
+! ---------------------------------------------------------------------
+! Function: tfm_density_arrhenius_i
+!
+! The function computes an arrhenius equation for a given factor, 
+! activation energy and temperature. The dimension of the input and
+! output is always one.
+!
+! Author: Timm Schultz
+! 
+! Arguments:
+!   i: Dummy variable needed for the interface (tfm_density_arrhenius).
+!   factor: Pre factor of the arrhenius equation.
+!   activation_energy: Activation energy of the arrhenius equation.
+!   tempreature: Temperature (K).
+!
+! Result:
+!   arrhenius: Arrhenius Factor (dimension 1).
+! ---------------------------------------------------------------------
 
     m = 1 * i
 
@@ -38,6 +78,24 @@ module tfm_density_tools
     real(prec), dimension(n), intent(in) :: temperature
 
     real(prec), dimension(n) :: arrhenius
+! ---------------------------------------------------------------------
+! Function: tfm_density_arrhenius_n
+!
+! The function computes an arrhenius equation for a given factor, 
+! activation energy and temperature. The dimension of the input and
+! output is defined by input.
+!
+! Author: Timm Schultz
+! 
+! Arguments:
+!   n: Dimension of temperature input and arrhenius factor output.
+!   factor: Pre factor of the arrhenius equation.
+!   activation_energy: Activation energy of the arrhenius equation.
+!   temperature: Temperature (K).
+!
+! Result:
+!   arrhenius: Arrhenius factor (dimension n).
+! ---------------------------------------------------------------------
 
     arrhenius = factor * exp(-activation_energy / (GAS_CONST * temperature))
   end function tfm_density_arrhenius_n
@@ -51,6 +109,24 @@ module tfm_density_tools
     real(prec), intent(in) :: dz
 
     real(prec), intent(inout) :: v
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_lin_interp
+!
+! Simple routine for linear interpolation between given values.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   z0: First given x-value.
+!   z1: Second given x-value.
+!   v0: First fiven y-value.
+!   v1: Second given y-value.
+!   dz: Distance to value z0 at which to interpolate at.
+!   v - on input: Variable to store the result.
+!
+! Result:
+!   v - on output: Value from linear interpolation at z0 + dz.
+! ---------------------------------------------------------------------
 
     v = v0 + ((v1 - v0) / (z1 - z0)) * dz
   end subroutine tfm_density_lin_interp
@@ -62,6 +138,18 @@ module tfm_density_tools
     integer, intent(in) :: nz
     real(prec), dimension(nz), intent(in) :: variable
     real(prec), dimension(nz)             :: nothing
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_do_nothing
+!
+! Routine to do "nothing" with a given variable. Used to avoid warnings
+! at compile time.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of the given variable.
+!   variable: Variable to do nothing about.
+! ---------------------------------------------------------------------
 
     nothing = variable
   end subroutine tfm_density_do_nothing
@@ -80,6 +168,29 @@ module tfm_density_tools
     integer    :: n
     integer    :: m
     real(prec) :: d
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_bagmean
+!
+! The routine computes bagmean values of a given density profile.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of arrays "depth" and "density".
+!   depth: Array containing the depth values of the density profile (m).
+!   density: Array containing the density values of the density
+!            profile (kg m**-3).
+!   dz: Size of the "window" the bagmean values are computed from (m).
+!   mz: Length of the bagmean density profile (total length of
+!       the profile is mz*dz)
+!   bagmean - on input: Variable to store the bagmean profile.
+!
+! Result:
+!   bagmean - on output: Array of dimension "mz" contaning the depth
+!                        (1,:) values (m) of the bagmean profile and
+!                        the corresponding density (2,:)
+!                        values (kg m**-3).
+! ---------------------------------------------------------------------
 
     bagmean = 0.0
 
@@ -106,6 +217,22 @@ module tfm_density_stress
   use settings
   use tfm_constants
   implicit none
+! ---------------------------------------------------------------------
+! Module: tfm_density_stress
+!
+! The module contains common stress related procedures.
+!
+! Dependencies: settings, tfm_constants
+!
+! Functions:
+!  tfm_density_boyleMariotte: Boyle-Mariotte factor from absolute
+!                             density.
+!  tfm_rel_density_boyleMariotte: Boyle-Mariotte factor from
+!                                 relative density
+!
+! Subroutines:
+!  tfm_density_computeStress: stres from depth and density
+! ---------------------------------------------------------------------
 
   contains
 
@@ -120,6 +247,24 @@ module tfm_density_stress
 
     integer                   :: n
     real(prec), dimension(nz) :: dz
+! ---------------------------------------------------------------------
+! Subroutine tfm_density_computeStress
+!
+! Routine to compute the stress along a given firn profile, by
+! integration of the density.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", and "stress".
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   stress - on input: Variable to store the result.
+!
+! Result:
+!   stress - on output: Stress computed from "depth" and
+!                       "density" (Pa).
+! ---------------------------------------------------------------------
 
     dz(nz) = 0.0_prec
     dz(1:nz-1) =  depth(2:nz) - depth(1:nz-1)
@@ -136,6 +281,22 @@ module tfm_density_stress
     
     real(prec), intent(in) :: density
     real(prec)             :: boyle_mariotte
+! ---------------------------------------------------------------------
+! Function: tfm_density_boyleMariotte
+!
+! Boyle-Mariotte equation to compute the pore pressure within bubbly
+! ice from given absoulte density.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!
+! Result:
+!   boyle_mariotte: Boyle-Mariotte factor. The pore pressure is the
+!                   product of this factor and the pressure at pore
+!                   close off (1).
+! ---------------------------------------------------------------------
 
     boyle_mariotte = (                                &
     &  (density * (ICE_DENSITY - CLOSEOFF_DENSITY))   &
@@ -149,6 +310,21 @@ module tfm_density_stress
 
     real(prec), intent(in) :: rel_density
     real(prec)             :: rel_boyle_mariotte
+! ---------------------------------------------------------------------
+! Function: tfm_density_rel_boyleMariotte
+!
+! Boyle-Mariotte equation to compute the pore pressure within bubbly
+! ice from given relative density.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   density: Relative density (1).
+!
+! Result:
+!   boyle_mariotte: Boyle-Mariotte factor. The pore pressure is the
+!   product of this factor and the pressure at pore close off (1).
+! ---------------------------------------------------------------------
 
     rel_boyle_mariotte = (                                             &
     &  rel_density * (1.0_prec - (CLOSEOFF_DENSITY / ICE_DENSITY))     &
@@ -156,7 +332,6 @@ module tfm_density_stress
     )
   end function tfm_density_rel_boyleMariotte
 end module tfm_density_stress
-
 
 
 
@@ -173,6 +348,34 @@ module tfm_density_processes
   real(prec), parameter :: AIR_PRESSURE = 101325.0_prec
   real(prec), parameter :: H            = 4.0e-6_prec
   real(prec), parameter :: MU           = 0.7_prec
+! ---------------------------------------------------------------------
+! Module: tfm_density_processes
+!
+! The module contains functions for process based firn densification
+! modelling. It is mainly based on:
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climate Change, 40, 605-&24, (1998). https://
+! doi.org/10.1023/A:1005320713306
+!
+! Dependencies: settings, tfm_constants, tfm_density_tools,
+!               tfm_density_stress
+!
+! Parameters (see Arthern & Wingham, 1998):
+!   DELTA_B: Width of the grain boundary (m).
+!   OMEGA: Volume of the H2O molecule (m**3).
+!   AIR_PRESSURE: Normal air pressure (Pa).
+!   H: Amplitude of grain boundary obstructions (m).
+!   MU: Ratio of neck radius to grain radius (1).
+!
+! Functions:
+!  tfm_density_grainBoundarySliding: strain rate from grain boundary
+!                                    sliding
+!  tfm_density_dislocationCreep: strain rate from dislocation creep
+!  tfm_density_boundaryDiffusion: strain rate from boundary diffusion
+!  tfm_density_latticeDiffusion: strain rate from lattice diffusion
+! ---------------------------------------------------------------------
 
   contains
 
@@ -192,6 +395,43 @@ module tfm_density_processes
     ! paramters
     real(prec) :: ABDC    = 3.0e-2_prec
     real(prec) :: QBDC    = 44100.0_prec
+! ---------------------------------------------------------------------
+! Function: tfm_density_grainBoundarySliding
+!
+! The function computes the strain rate in firn resulting from grain
+! boundary sliding as described by:
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
+! doi.org/10.1023/A:1005320713306
+!
+! This description is based on the work of:
+!
+! Alley, R. B. Firn Densification by Grain Boundary Sliding: A First
+! Model. J. Phys. Colloques, 48, C1, C1-249-C1-256, (1987), https://
+! doi.org/10.1051/jphyscol:1987135
+!
+! Author: Timm Schultz
+!
+! Parameters:
+!   ABDC: Pre factor for the arrhenius equation describing boundary 
+!         diffusion (m**2 s**-1).
+!   QBDC: Activation energy for the arrhenius equation describing
+!         boundary diffusion sliding (J mol**-1).
+!
+! For parameters see Arthern & Wingham (1998).
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!   temperature: Temperature (K).
+!   grain_radius: Grain radius (m).
+!   stress: Stress due to overburden firn (Pa).
+!
+! Result:
+!   strain_rate: Strain rate resulting from grain boundary
+!                sliding (s**-1).
+! ---------------------------------------------------------------------
 
     strain_rate = 0.0_prec
 
@@ -241,6 +481,41 @@ module tfm_density_processes
     ! parameters
     real(prec) :: ADC = 3.22e-11_prec
     real(prec) :: QDC = 74500.0_prec
+! ---------------------------------------------------------------------
+! Function: tfm_density_dislocationCreep
+!
+! The function computes the strain rate in firn resulting from
+! dislocation creep as described by:
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
+! doi.org/10.1023/A:1005320713306
+!
+! This description is based on the work of:
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem., 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Parameters:
+!   ADC: Pre factor for the arrhenius equation describing dislocation
+!        creep ((N m**-2)**-n).
+!   QDC: Activation energy for the arrhenius equation describing
+!        dislocation creep(J mol**-1).
+!
+! For parameters see Arthern & Wingham (1998).
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!   temperature: Temperature (K).
+!   stress: Stress due to overburden firn (Pa).
+!
+! Result:
+!   strain_rate: Strain rate resulting from dislocation creep (s**-1).
+! ---------------------------------------------------------------------
 
     arrhenius = tfm_density_arrhenius(1, ADC, QDC, temperature)
     rel_density = (density / ICE_DENSITY)
@@ -303,6 +578,42 @@ module tfm_density_processes
     ! parameters
     real(prec) :: ABDC = 3.0e-2_prec
     real(prec) :: QBDC = 44100.0_prec
+! ---------------------------------------------------------------------
+! Function: tfm_density_boundaryDiffusion
+!
+! The function computes the strain rate in firn resulting from
+! boundary diffusion as described by:
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
+! doi.org/10.1023/A:1005320713306
+!
+! This description is based on the work of:
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem, 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Parameters:
+!   ABDC: Pre factor for the arrhenius equation describing boundary
+!         diffusion (m**2 s**-1).
+!   QBDC: Activation energy for the arrhenius equation describing
+!         boundary diffusion (J mol**-1).
+!
+! For parameters see Arthern & Wingham (1998).
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!   temperature: Temperature (K).
+!   grain_radius: Grain radius (m).
+!   stress: Stress due to overburden firn (Pa).
+!
+! Result:
+!   strain_rate: Strain rate resulting from boundary diffusion (s**-1).
+! ---------------------------------------------------------------------
 
     arrhenius = tfm_density_arrhenius(1, ABDC, QBDC, temperature)
 
@@ -359,7 +670,42 @@ module tfm_density_processes
     ! parameters
     real(prec), parameter :: ALD = 3.0e-2_prec
     real(prec), parameter :: QLD = 66200.0_prec
-
+! ---------------------------------------------------------------------
+! Function: tfm_density_latticeDiffusion
+!
+! The function computes the strain rate in firn resulting from
+! lattice diffusion as described by:
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
+! doi.org/10.1023/A:1005320713306
+!
+! This description is based on the work of:
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem, 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Parameters:
+!   ALD: Pre factor for the arrhenius equation describing lattice
+!        diffusion (m**2 s**-1).
+!   QLD: Activation energy for the arrhenius equation describing
+!        lattice diffusion (J mol**-1).
+!
+! For parameters see Arthern & Wingham (1998).
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!   temperature: Temperature (K).
+!   grain_radius: Grain radius (m).
+!   stress: Stress due to overburden firn (Pa).
+!
+! Result:
+!   strain_rate: Strain rate resulting from lattice diffusion (s**-1).
+! ---------------------------------------------------------------------
 
     arrhenius = tfm_density_arrhenius(1, ALD, QLD, temperature)
 
@@ -410,6 +756,25 @@ module tfm_density_herronLangway
   use settings
   use tfm_constants
   implicit none
+! ---------------------------------------------------------------------
+! Module: tfm_density_herronLangway
+!
+! This module contains generic routines to solve firn densification
+! models of the Herron & Langway type. These routines can be used to
+! solve various firn densification models based on this model type.
+!
+! Herron, M. M. and Langway, C. C. Firn Densification: An Empirical
+! Model. Journal of Glaciology, 25 (93), 373-385, (1980). https://
+! doi.org/10.3189/S0022143000015239
+!
+! Dependencies: settings, tfm_constants
+!
+! Subroutines:
+!   tfm_density_mean_acc: Mean accumulation rate over firn parcel life
+!                         time.
+!   tfm_density_HLtype: Generic function for Herron & Langway type
+!                       models.
+! ---------------------------------------------------------------------
 
   contains
 
@@ -424,6 +789,31 @@ module tfm_density_herronLangway
     real(prec), dimension(nz), intent(inout) :: mean_acc
 
     integer :: n
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_mean_acc
+!
+! The subroutine computes the mean accumulation rate from the age of
+! the firn profile. The concept follows the idea of calculating the
+! mean accumulation rate over the life time of a firn parcel.
+!
+! See for example:
+! Stevens, C. M., Verjans, V., Lunding, J. M. D., Kahle, E. C.,
+! Horlings, A. N., Horlings, B. I., and Waddington, E. D. The Community
+! Firn Model (CFM) v1.0. Geosci. Model. Dev., 13, 4355-4377, (2020).
+! https://doi.org/10.5194/gmd-13-4355-2020
+! 
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "age", "mean_acc".
+!   depth: Depth of the firn profile (m).
+!   density: Density of the firn profile (kg m**-3).
+!   age: Age of the firn profile (s).
+!   mean_acc - on input: Variable to store the mean accmulation rate.
+!
+! Result:
+!   mean_acc - on output: Mean accumulation rate (m weq. a**-1).
+! ---------------------------------------------------------------------
 
     mean_acc(nz) = 0.0
     do n = nz - 1, 1, -1
@@ -454,7 +844,42 @@ module tfm_density_herronLangway
 
     integer                   :: n
     real(prec), dimension(nz) :: c
-
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_HLtype
+!
+! The routine computes the density change resulting from a "generic"
+! densification model of the Herron & Langway type.
+!
+! Herron, M. M. and Langway, C. C. Firn Densification: An Empirical
+! Model. Journal of Glaciology, 25 (93), 373-385, (1980). https://
+! doi.org/10.3189/S0022143000015239
+!
+! Many firn densification models rely on this type of model. The idea
+! is to formulate a generic function following the general form of the
+! material model. It is then solved by passing three arguments for the
+! first and the second stage of firn densification. All models following
+! the concept of Herron & Langway can be broken down to these six
+! parameters.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension variables "depth", "temperature", "density", "age",
+!       "d_density".
+!   dt: Time step (s).
+!   stage1_params: Parameters for the first densification stage
+!                  (dimension (3)).
+!   stage2_params: Parameters for the seconds densification stage
+!                  (dimension (3)).
+!   depth: Depth of the firn profile (m).
+!   temperature: Temperature of the firn profile (K).
+!   density: Density of the firn profile (kg m**-3).
+!   age: Age of the firn profile (s).
+!   d_density - on input: Variable for the result.
+!
+! Result:
+!   d_density - on output: Change of the density (kg m**-3).
+! ---------------------------------------------------------------------
 
     ! computation of the mean accumulation rate 
     ! over the lifetime of the firn parcel (kg a-1 m-2)
@@ -515,9 +940,42 @@ module tfm_density_fischmeisterArzt
   end interface tfm_density_arztContactarea
 
   ! parameters
-  real(prec), parameter :: ZZERO = 7.3
-  !real(prec), parameter :: ZZERO = 4.81
-  real(prec), parameter :: CARZT = 15.5
+  real(prec), parameter :: ZZERO = 7.3_prec
+  !real(prec), parameter :: ZZERO = 4.81_prec
+  real(prec), parameter :: CARZT = 15.5_prec
+! ---------------------------------------------------------------------
+! Module: tfm_density_fischmeisterArzt
+!
+! The module contains routines to compute the coordination number and
+! contact area of particles during sintering based on the density
+! following the work of Fischmeister & Arzt. For different uses
+! different functions handling different dimensions are connected via
+! suitable interfaces.
+!
+! Fischmeister, H. F. and Arzt, E. Densification of powders by particle
+! deformation. Powder Metallurgy, 26 (2), 82-88, (1983).
+! https://doi.org/10.1179/pom.1983.26.2.82
+!
+! Dependencies: settings, tfm_constants
+! 
+! Interfaces:
+!   tfm_density_arztCoordination: Interface for coordination number
+!                                 ("tfm_density_arztCoordination_i",
+!                                 "tfm_arztCoordination_n").
+!   tfm_density_arztContactarea: Interface for contact area
+!                                ("tfm_density_arztContactarea_i",
+!                                "tfm_arztContactarea_n").
+!
+! Parameters:
+!   ZZERO: Coordination number at densest packing (1).
+!   CARZT: Factor (1)
+!
+! Functions:
+!   tfm_density_arztCoordination_i: Coordination number, dimension (1).
+!   tfm_density_arztCoordination_n: Coordination number, dimenison (n).
+!   tfm_density_arztContactarea_i: Contact area, dimension(1).
+!   tfm_density_arztContactarea_n: Contact area, dimension(n).
+! ---------------------------------------------------------------------
 
   contains
 
@@ -531,6 +989,22 @@ module tfm_density_fischmeisterArzt
     real(prec), intent(in) :: d_zero
     real(prec)             :: coordination_number
     integer                :: m
+! ---------------------------------------------------------------------
+! Function tfm_density_arztCoordination_i
+!
+! Computation of the coordination number following Fischmeister & Arzt
+! (1983) for dimension (1).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   n: Dummy argument for the interface (always = 1).
+!   rel_density: Relative density (1).
+!   d_zero: Relative density at densest packing (1).
+!
+! Result:
+!   coordination_number: Coordination number at given density (1).
+! ---------------------------------------------------------------------
 
     m = 1 * n
 
@@ -548,6 +1022,22 @@ module tfm_density_fischmeisterArzt
     real(prec), dimension(n), intent(in) :: rel_density
     real(prec), intent(in)               :: d_zero
     real(prec), dimension(n)             :: coordination_number
+! ---------------------------------------------------------------------
+! Function tfm_density_arztCoordination_n
+!
+! Computation of the coordination number following Fischmeister & Arzt
+! (1983) for dimension (n).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   n: Dimension of variables "rel_density", "coordination_number".
+!   rel_density: Relative density (1).
+!   d_zero: Relative density at densest packing (1).
+!
+! Result:
+!   coordination_number: Coordination number at given density (1).
+! ---------------------------------------------------------------------
 
     coordination_number = (                                          &
     &  ZZERO + CARZT * (((rel_density / d_zero)**(1.0 / 3.0)) - 1.0) &
@@ -567,6 +1057,22 @@ module tfm_density_fischmeisterArzt
     real(prec) :: r_i, r_ii
     real(prec) :: contactarea
     integer    :: m
+! ---------------------------------------------------------------------
+! Function tfm_density_arztContactarea_i
+!
+! Computation of the contact area between grains  following
+! Fischmeister & Arzt (1983) for dimension (1).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   n: Dummy argument for the interface (always = 1).
+!   rel_density: Relative density (1).
+!   d_zero: Relative density at densest packing (1).
+!
+! Result:
+!   contact_area: Contact area at given density (1).
+! ---------------------------------------------------------------------
 
     m = 1 * n
 
@@ -606,6 +1112,22 @@ module tfm_density_fischmeisterArzt
     real(prec), dimension(n) :: coordination_number
     real(prec), dimension(n) :: r_i, r_ii
     real(prec), dimension(n) :: contactarea
+! ---------------------------------------------------------------------
+! Function tfm_density_arztContactarea_n
+!
+! Computation of the contact area between grains  following
+! Fischmeister & Arzt (1983) for dimension (n).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   n: Dimension of variables "rel_density", "coordination_number".
+!   rel_density: Relative density (1).
+!   d_zero: Relative density at densest packing (1).
+!
+! Result:
+!   contact_area: Contact area at given density (1).
+! ---------------------------------------------------------------------
 
     coordination_number = tfm_density_arztCoordination(n, rel_density, d_zero)
 
@@ -670,7 +1192,38 @@ module tfm_density_gagliardini
       real(prec), dimension(nz) :: viscosity
     end function viscosity_inter
   end interface
-
+! ---------------------------------------------------------------------
+! Module: tfm_density_gagliardini
+!
+! The module contains routines to solve a firn densification model of
+! the kind first described for firn by:
+!
+! Gagliardini, O. and Meyssonnier, J. Flow simulation of a firn-covered
+! cold glacier. Annals of Glaciology, 24, 242-248 (1997).
+! https://doi.org/10.3189/S0260305500012246
+!
+! The model is based on the work of Duva & Crow:
+!
+! Duva, J. M. and Crow, P. D. Analysis of consolidation of reinforced
+! materials by power-law creep. Mechanics of Materials, 17 (1), 25-32,
+! (1994). https://doi.org/10.1016/0167-6636(94)90011-6
+!
+! Dependencies: settings, tfm_constants, tfm_denisty_tools
+! 
+! Interfaces:
+!   invariant_inter: Interface for the invariant function.
+!   viscosity_inter: Interface for viscosity functions.
+!
+! Parameters:
+!   STAGE_DIV: Relative density at transition stage II - stage III (1).
+! 
+! Functions:
+!   tfm_density_gagliardiniParamA0: Parameter A0 of the model.
+!   tfm_density_gagliardiniParamB0: Parameter B0 of the model.
+!   tfm_density_gagliardiniRate: Rate factor.
+!   tfm_density_gagliradiniSolve: Function for solving the model
+!                                 interatively.
+! ---------------------------------------------------------------------
 
   contains
 
@@ -681,6 +1234,20 @@ module tfm_density_gagliardini
     real(prec), intent(in) :: density
     real(prec)             :: param_a0
     real(prec)             :: rel_density
+! ---------------------------------------------------------------------
+! Function: tfm_density_gagliardiniParmA0
+!
+! Parameter a0 of the firn densification model as described by
+! Gagliardini & Meyssonnier (1997), following Duva & Crow (1994).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!
+! Result:
+!   param_a0: Parameter a0.
+! ---------------------------------------------------------------------
 
     rel_density = density / ICE_DENSITY
 
@@ -697,6 +1264,20 @@ module tfm_density_gagliardini
     real(prec), intent(in) :: density
     real(prec)             :: param_b0
     real(prec)             :: rel_density
+! ---------------------------------------------------------------------
+! Function: tfm_density_gagliardiniParamB0
+!
+! Parameter b0 of the firn densification model as described by
+! Gagliardini & Meyssonnier (1997), following Duva & Crow (1994).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   density: Absolute density (kg m**-3).
+!
+! Result:
+!   param_b0: Parameter b0.
+! ---------------------------------------------------------------------
     
     rel_density = density / ICE_DENSITY
 
@@ -726,6 +1307,33 @@ module tfm_density_gagliardini
     real(prec) :: PRE_FACTOR_HIGH = 1.916e3_prec
     real(prec) :: ACTIVATION_ENERGY_LOW  =  60000.0_prec
     real(prec) :: ACTIVATION_ENERGY_HIGH = 139000.0_prec
+! ---------------------------------------------------------------------
+! Function: tfm_density_gagliardiniRate
+!
+! Rate factor for ice flow following:
+! Greve, R. and Blatter, H. Dynamics of Ice Sheets and Galciers.
+! Springer, Berlin, (2009).
+!
+! Author: Timm Schultz
+!
+! Parameters (Greve & Blatter, 2009):
+!   TEMP_DIV: Temperature dividing high and low temperature (K).
+!   PRE_FACTOR_LOW: Pre factor of the arrhenius equation at low
+!                   temperatures.
+!   PRE_FACTOR_HIGH: Pre factor of the arrhenius equation at high
+!                    temperatures.
+!   ACTIVATION_ENERGY_LOW: Activation energy of the arrhenius equation
+!                          at low temperatures.
+!   ACTIVATION_ENERGY_HIGH: Activation energy of the arrhenius equation
+!                           at hight temperatures.
+!
+! Arguments:
+!   nz: Dimension of variables "temperature" and "rate_factor".
+!   temperature: Temperature (K).
+!
+! Result:
+!   rate_factor: Rate factor.
+! ---------------------------------------------------------------------
 
     do n = 1, nz, 1
       if ( temperature(n) <= TEMP_DIV ) then
@@ -791,7 +1399,34 @@ module tfm_density_gagliardini
     real(prec), dimension(nz) :: shear_viscosity
 
     integer, parameter :: MAX_ITER = 1000
-
+! ---------------------------------------------------------------------
+! Function tfm_density_gagliardiniSolve
+!
+! This function solves a firn densification model of the kind described
+! by Gagliardini & Meyssonnier (1997). Because this kind of model is
+! non-linear it is solved iteratively.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "density", "stress", "param_a",
+!       "param_b", "rate_factor".
+!   density: Absolute density (kg m**-3).
+!   stress: Stress due to overburden firn (Pa).
+!   dt: Time step (s).
+!   param_a: Parameter a along the firn profile.
+!   param_b: Parameter b along the firn profile.
+!   rate_factor: Ice flow rate factor.
+!   invariant_func: Function defining the strain invariant (procedure,
+!                   interface: invariant_func).
+!   shear_visco_func: Function defining the shear viscosity (procedure,
+!                     interface: viscosity_inter).
+!   bulk_visco_func: Function defining the bulk viscosity (procedure,
+!                    interface: viscosity_inter).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ---------------------------------------------------------------------
 
     ! first guess of the invariant
     invariant = invariant_func(nz, param_a, param_b)
@@ -817,8 +1452,8 @@ module tfm_density_gagliardini
     do while ( (maxval(abs(d_density - d_density_prev)) > 1.0e-2) .or. (iter == MAX_ITER) )
 
       ! first guess of the invariant
-      invariant = invariant_func( &
-      &  nz, param_a, param_b, strain_rate          &
+      invariant = invariant_func(          &
+      &  nz, param_a, param_b, strain_rate &
       &)
 
       ! viscosities
@@ -863,7 +1498,39 @@ module tfm_density
   use tfm_density_processes
   use tfm_density_gagliardini
   implicit none
-
+! ---------------------------------------------------------------------
+! Module: tfm_density
+!
+! This module is a collection of various different firn densification
+! models. All functions compute the change in density. The arguments
+! passed to the individual functions are always the same allowing to
+! pass them via a suitable interface. This means that some arguments
+! may not be used by the function.
+!
+! Dependencies: settings, tfm_constants, tfm_density_tools,
+!               tfm_density_herronLangway, tfm_density_stress,
+!               tfm_density_fischmeisterArzt, tfm_density_processes,
+!               tfm_density_gagliardini
+!
+! Functions:
+!   tfm_density_depth: Change in depth due to densification.
+!   tfm_density_gagliardini1998: Gagliardini & Meyssonier (1998).
+!   tfm_density_timmsfit: Timm's version of the Gagliardini model.
+!   tfm_density_greve2009: Greve & Blatter (2009).
+!   tfm_density_zwinger2007: Zwinger et al. (2007).
+!   tfm_density_breant2017: Breant et al. (2017).
+!   tfm_density_medley2020: Medley et al. (2020) (preprint).
+!   tfm_density_herron1980: Herron & Langway (1980) (transient).
+!   tfm_density_arthern1998: Arthern & Wingham (1998).
+!   tfm_density_li2003: Li & Zwally (2003).
+!   tfm_density_helsen2008: Helsen et al. (2008).
+!   tfm_density_arthern2010: Arthern et al. (2010).
+!   tfm_density_ligtenberg2011: Ligtenberg et al. (2011).
+!   tfm_density_simonsen2013: Simonsen et al. (2013).
+!
+! Subroutines:
+!   tfm_density_herron1980_analytical: Herron & Langway (analytical).
+! ---------------------------------------------------------------------
 
   contains
 
@@ -881,6 +1548,24 @@ module tfm_density
     real(prec), dimension(nz) :: dz
     real(prec), dimension(nz) :: ddz
     integer                   :: n
+! ---------------------------------------------------------------------
+! Function: tfm_density_depth
+!
+! The function computes the change in depth along a firn profile from
+! change in density.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "d_density",
+!       "d_depth".
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   d_density: Density change along the firn profile (kg m**-3).
+!
+! Result:
+!   d_depth: Change in depth along the firn profile (m).
+! ---------------------------------------------------------------------
 
     dz(1) = 0.0_prec
     dz(2:nz) = (depth(2:nz) - depth(1:nz-1))
@@ -912,6 +1597,28 @@ module tfm_density
     real(prec), dimension(nz) :: param_b
     real(prec), dimension(nz) :: rate_factor
     real(prec), dimension(nz) :: stress
+! ----------------------------------------------------------------------
+! Function: tfm_denisty_gagliardini1998
+!
+! Gagliardini, O. and Meyssonnier, J. Flow simulation of a firn-covered
+! cold glacier. Annals of Glaciology, 24, 242-248, (1997).
+! https://doi.org/10.3189/S0260305500012246
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     ! doing nothing
     call tfm_density_do_nothing(nz, age)
@@ -1042,7 +1749,24 @@ module tfm_density
     real(prec), dimension(nz) :: param_b
     real(prec), dimension(nz) :: rate_factor
     real(prec), dimension(nz) :: stress
-
+! ----------------------------------------------------------------------
+! Function: tfm_density_timmsfit
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     ! doing nothing
     call tfm_density_do_nothing(nz, age)
@@ -1160,7 +1884,27 @@ module tfm_density
     real(prec), dimension(nz) :: param_b
     real(prec), dimension(nz) :: rate_factor
     real(prec), dimension(nz) :: stress
-
+! ----------------------------------------------------------------------
+! Function: tfm_density_greve2009
+!
+! Greve, R. and Blatter, H. Dynamics of Ice Sheets and Glaciers.
+! Springer, Berlin, (2009).
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+!-----------------------------------------------------------------------
 
     ! doing nothing
     call tfm_density_do_nothing(nz, age)
@@ -1269,6 +2013,29 @@ module tfm_density
     real(prec), dimension(nz) :: param_b
     real(prec), dimension(nz) :: rate_factor
     real(prec), dimension(nz) :: stress
+! ----------------------------------------------------------------------
+! Function: tfm_density_zwinger2007
+!
+! Zwinger, T., Greve, R., Gagliardini, O., Shiraiwa, T., and Lyly, M. A
+! full Stokes-flow thermo-mechanical model for firn and ice applied to
+! the Gorshkov crater glacier, Kamchatka. Annals of Glaciology, 45,
+! 29-37, (2007). https://doi.org/10.3189/172756407782282543
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+!-----------------------------------------------------------------------
 
     ! doing nothing
     call tfm_density_do_nothing(nz, age)
@@ -1416,6 +2183,29 @@ module tfm_density
     real(prec), parameter :: A2 = 1400.0,  Q2 =  75000.0
     real(prec), parameter :: A3 = 6.0e-15, Q3 =   1500.0
     real(prec), parameter :: QGBS = 49500.0
+! ----------------------------------------------------------------------
+! Function: tfm_density_breant2017
+!
+! Breant, C., Martinerie, P., Orsi, A., Arnaud, L., and Landais, A.
+! Modelling firn thickness evolution during the last deglaciation:
+! constraints on sensitivity to temperature and impurities. Clim. Past,
+! 13, 833-853, (2017). https://doi.org/10.5194/cp-13-833-2017
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+!-----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, age)
     call tfm_density_do_nothing(nz, grain_radius)
@@ -1574,6 +2364,31 @@ module tfm_density
 
     integer                   :: n
     real(prec)                :: mean_temperature
+! ----------------------------------------------------------------------
+! Function tfm_density_medley2020
+!
+! Medley, B., Neumann, T. A., Zwally, H. J., and Smith, B. E. Forty-year
+! Simulations of Firn Processes over the Greenland and Antarctic Ice
+! Sheets. The Cryosphere Discuss. [preprint], in review, (2020).
+! https://doi.org/10.5194/tc-2020-266
+!
+! NOTE! This functions is based on the preprint version of the paper.
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, grain_radius)
 
@@ -1624,6 +2439,28 @@ module tfm_density
     real(prec), dimension(nz), intent(in) :: grain_radius
 
     real(prec), dimension(nz) :: d_density
+! ----------------------------------------------------------------------
+! Function: tfm_density_herron1980
+!
+! Herron, M. M. and Langway, C. C. Firn Densification: An Empirical
+! Model. Journal of Glaciology, 25 (93), 373-385, (1980).
+! https://doi.org/10.3189/S0022143000015239
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, grain_radius)
 
@@ -1657,6 +2494,29 @@ module tfm_density
     real(prec), dimension(nz) :: d_density
     real(prec), dimension(nz) :: stress
     real(prec), dimension(nz) :: strain_rate
+! ----------------------------------------------------------------------
+! Function: tfm_density_arthern1998
+!
+! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
+! Densification and Their Effect on the Geodetic Determination of Ice
+! Sheet Mass Balance. Climatic Change, 40, 605-624, (1998).
+! https://doi.org/10.1023/A:1005320713306
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, age)
 
@@ -1749,6 +2609,29 @@ module tfm_density
     real(prec)                :: mean_temperature
     real(prec)                :: grain_growth_rate
     real(prec)                :: beta
+! ----------------------------------------------------------------------
+! Function: tfm_density_li2003
+!
+! Li, J., Zwally, H. J., Corneja, H., and Yi, D. Seasonal variation of
+! snow-surface elevation in North Greenland as modeled and detected by
+! satellite radar altimetry. Annals of Glaciology, 37, 223-238, (2003).
+! https://doi.org/10.3189/172756403781815889
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, grain_radius)
 
@@ -1817,6 +2700,30 @@ module tfm_density
     real(prec)                :: mean_temperature
     real(prec)                :: grain_growth_rate
     real(prec)                :: beta
+! ----------------------------------------------------------------------
+! Function: tfm_density_helsen2008
+!
+! Helsen, M. M., van den Broeke, M. R., van den Wal, R. S. W.,
+! van de Berg, W. J., van Meijgaard, E., Davis, C. H., Li, Y., and
+! Goodwin, I. Elevation Changes in Antarctica Mainly Determined by
+! Accumulation Variability. Science, 320 (5883), 1626-1629, (2008).
+! https://doi.org/10.1126/science.1153894
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, grain_radius)
 
@@ -1879,6 +2786,29 @@ module tfm_density
     real(prec), dimension(nz) :: d_density
     real(prec)                :: mean_temperature
     integer                   :: n
+! ----------------------------------------------------------------------
+! Function: tfm_density_arthern2010
+!
+! Arthern, R. J., Vaughan, D. G., Rankin, A. M., Mulvaney, R., and
+! Thomas, E. R. In situ measurements of Antarctic snow compaction
+! compared with predictions of models. Journal of Geophysical Research:
+! Earth Surface, 115 (F3), (2010). https://doi.org/10.1029/2009JF001306
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     call tfm_density_do_nothing(nz, grain_radius)
 
@@ -1921,6 +2851,29 @@ module tfm_density
     real(prec), dimension(nz) :: d_density
     real(prec), dimension(nz) :: mean_acc
     integer                   :: n
+! ----------------------------------------------------------------------
+! Function: tfm_density_ligtenberg2011
+!
+! Ligtenberg, S. R. M., Helsen, M. M. and van den Broeke, M. R. An
+! improved semi-empirical model for the densification of Antarctic firn.
+! The Cryosphere, 5, 809-819, (2011).
+! https://doi.org/10.5194/tc-5-809-2011
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     d_density = tfm_density_arthern2010(nz, dt, depth, density, &
       & temperature, age, grain_radius)
@@ -1968,6 +2921,30 @@ module tfm_density
     integer                   :: n
     real(prec), dimension(nz) :: mean_acc
     real(prec)                :: mean_temperature
+! ----------------------------------------------------------------------
+! Function: tfm_density_simonsen2013
+!
+! Simonsen, S. B., Stenseng, L., Adalgeisdottir, G., Fausto, R. S.,
+! Hvidberg, C. S., and Lucas-Picher, P. Assessing a multilayered dynamic
+! firn-compaction model for Greenland with ASIRAS radar measurements.
+! Journal of Glaciology, 59 (215), 545-558, (2013).
+! https://doi.org/10.3189/2013JoG12J158
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth", "density", "temperature", "age",
+!       "grain_radius", "d_density".
+!   dt: Time step (s).
+!   depth: Depth along the firn profile (m).
+!   density: Density along the firn profile (kg m**-3).
+!   temperature: Temeperature along the firn profile (K).
+!   age: Age along the firn profile (s).
+!   grain_radius: Grain radius along the firn profile (m).
+!
+! Result:
+!   d_density: Density change along the firn profile (kg m**-3).
+! ----------------------------------------------------------------------
 
     d_density = tfm_density_arthern2010(nz, dt, depth, density, &
       & temperature, age, grain_radius)
@@ -2011,6 +2988,26 @@ module tfm_density
     integer    :: n
     real(prec) :: k0, k1, z550
     real(prec), dimension(nz) :: comp_depth
+! ---------------------------------------------------------------------
+! Subroutine: tfm_density_herron1980_analytical
+!
+! Herron, M. M. and Langway, C. C. Firn Densification: An Empirical
+! Model. Journal of Glaciology, 25 (93), 373-385, (1980).
+! https://doi.org/10.3189/S0022143000015239
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of variables "depth" and "density".
+!   temperature: Temperature (K).
+!   accumulation: Accumulation rate (m weq. s**-1).
+!   surface_density: Surface density (kg m**-3).
+!   depth: Depth along the firn profile (m).
+!   density - on input: Variable to store the result.
+!
+! Result:
+!   density - on output: Density (kg m**-3).
+! ---------------------------------------------------------------------
 
     comp_depth = -(depth - depth(nz))
 
