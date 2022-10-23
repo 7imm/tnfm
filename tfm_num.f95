@@ -3,6 +3,7 @@ module tfm_num
   use tfm_constants
   use tfm_liquid
   use tfm_temperature
+  use tfm_grain
   use tfm_density
   implicit none
 
@@ -91,12 +92,28 @@ module tfm_num
   end interface
 
 
+  ! interface for grain growth
+  interface
+    function grain_growth_inter(nz, dt, temperature)
+      use settings
+      implicit none
+
+      integer, intent(in)                   :: nz
+      real(prec), intent(in)                :: dt
+      real(prec), dimension(nz), intent(in) :: temperature
+
+      real(prec), dimension(nz) :: grain_growth_inter
+    end function grain_growth_inter
+  end interface
+
+
   type sim_models
-    procedure(density_inter),     pointer, nopass :: dens_model      => null()
-    procedure(temperature_inter), pointer, nopass :: temp_model      => null()
-    procedure(heatcap_inter),     pointer, nopass :: heatcap_model   => null()
-    procedure(thermcond_inter),   pointer, nopass :: thermcond_model => null()
-    procedure(liquid_inter),      pointer, nopass :: liquid_model    => null()
+    procedure(density_inter),      pointer, nopass :: dens_model      => null()
+    procedure(temperature_inter),  pointer, nopass :: temp_model      => null()
+    procedure(heatcap_inter),      pointer, nopass :: heatcap_model   => null()
+    procedure(thermcond_inter),    pointer, nopass :: thermcond_model => null()
+    procedure(liquid_inter),       pointer, nopass :: liquid_model    => null()
+    procedure(grain_growth_inter), pointer, nopass :: grain_model     => null()
   end type sim_models
 
   
@@ -104,7 +121,8 @@ module tfm_num
 
 
   subroutine tfm_num_modelinit(solve_density, solve_temperature, &
-    & solve_heat_capacity, solve_thermal_conductivity, solve_liquid, models)
+    & solve_heat_capacity, solve_thermal_conductivity, solve_liquid, &
+    & solve_grain_growth, models)
 
     implicit none
 
@@ -113,6 +131,7 @@ module tfm_num
     character(len=*), intent(in), optional :: solve_heat_capacity
     character(len=*), intent(in), optional :: solve_thermal_conductivity
     character(len=*), intent(in), optional :: solve_liquid
+    character(len=*), intent(in), optional :: solve_grain_growth
 
     ! pointer definition
     type(sim_models), intent(inout) :: models
@@ -120,6 +139,7 @@ module tfm_num
     ! default / fallback
     models%dens_model      => null()
     models%temp_model      => null()
+    models%grain_model     => null()
     models%heatcap_model   => null()
     models%thermcond_model => null()
     models%liquid_model    => null()
@@ -200,6 +220,7 @@ module tfm_num
         print *, 'subroutine: tfm_num_modelinit'
         print *, 'can not find heat capacity model: ', solve_heat_capacity
         print *, 'stopping right here!'
+        STOP
       end if
     end if
 
@@ -213,6 +234,21 @@ module tfm_num
         print *, 'subroutine: tfm_num_modelinit'
         print *, 'can not find thermal conductivity model: ', solve_heat_capacity
         print *, 'stopping right here!'
+        STOP
+      end if
+    end if
+
+    if ( present(solve_grain_growth) ) then
+      if ( solve_grain_growth == 'false' ) then
+        models%grain_model => null()
+      else if ( solve_grain_growth == 'arthern2010' ) then
+        models%grain_model => tfm_grain_arthern2010
+      else
+        print *, 'module: tfm_num'
+        print *, 'subroutine: tfm_num_modelinit'
+        print *, 'can not find grain growth model: ', solve_grain_growth
+        print *, 'stopping right here!'
+        STOP
       end if
     end if
   end subroutine tfm_num_modelinit
@@ -233,11 +269,12 @@ module tfm_num
 
     type(sim_props)           :: p
     integer                   :: n, m
-    real(prec), dimension(5)  :: residuum
+    real(prec), dimension(6)  :: residuum
     real(prec), dimension(nz) :: dens_residuum
     real(prec), dimension(nz) :: d_density, n_density
     real(prec), dimension(nz) :: d_temperature, n_temperature
     real(prec), dimension(nz) :: d_depth, n_depth
+    real(prec), dimension(nz) :: d_grain_radius, n_grain_radius
     real(prec), dimension(nz) :: n_heat_capacity
     real(prec), dimension(nz) :: n_thermal_conductivity
     real(prec), dimension(nz) :: n_age
@@ -248,12 +285,14 @@ module tfm_num
     n_depth = p%depth
     n_density = p%density
     n_temperature = p%temperature
+    n_grain_radius = p%grain_radius
     n_heat_capacity = p%heatcap
     n_thermal_conductivity = p%thermcond
     n_age = p%age
-    d_density = 0.0
-    d_temperature = 0.0
-    residuum = 0.0
+    d_density = 0.0_prec
+    d_temperature = 0.0_prec
+    d_grain_radius = 0.0_prec
+    residuum = 0.0_prec
     residuum(1) = -9999.9
 
     ! liquid model
@@ -318,6 +357,17 @@ module tfm_num
         ))
       end if
 
+      ! grain growth model
+      if ( associated(models%grain_model) ) then
+        d_grain_radius = models%grain_model( &
+        &  nz, dt,                           &
+        &  temperature=n_temperature         &
+        )
+        residuum(5) = maxval(abs(                             &
+        &  n_grain_radius - (p%grain_radius + d_grain_radius) &
+        ))
+      end if
+
       ! depth evolution
       d_depth = tfm_density_depth( &
       &  nz,                       &
@@ -325,12 +375,13 @@ module tfm_num
       &  density=p%density,        &
       &  d_density=d_density       &
       )
-      residuum(5) = maxval(abs(n_depth - (p%depth + d_depth)))
+      residuum(6) = maxval(abs(n_depth - (p%depth + d_depth)))
 
       ! reassignment
       n_depth                = (p%depth + d_depth)
       n_density              = (p%density + d_density)
       n_temperature          = (p%temperature + d_temperature)
+      n_grain_radius         = (p%grain_radius + d_grain_radius)
       n_heat_capacity        = n_heat_capacity
       n_thermal_conductivity = n_thermal_conductivity
 
@@ -341,12 +392,13 @@ module tfm_num
     n_age = tfm_num_age(nz, dt, p%age)
 
     ! new value
-    p%depth       = n_depth
-    p%density     = n_density
-    p%temperature = n_temperature
-    p%heatcap     = n_heat_capacity
-    p%thermcond   = n_thermal_conductivity
-    p%age         = n_age
+    p%depth        = n_depth
+    p%density      = n_density
+    p%temperature  = n_temperature
+    p%grain_radius = n_grain_radius
+    p%heatcap      = n_heat_capacity
+    p%thermcond    = n_thermal_conductivity
+    p%age          = n_age
   end subroutine tfm_num_step
 
 
@@ -355,7 +407,7 @@ module tfm_num
 
     integer, intent(in)                  :: np
     real(prec), intent(in)               :: dt
-    real(prec), dimension(6), intent(in) :: forcing
+    real(prec), dimension(7), intent(in) :: forcing
     type(sim_models), intent(in)         :: models
 
     integer, intent(inout)                     :: nz
@@ -364,14 +416,18 @@ module tfm_num
     type(sim_props) :: p
     integer         :: n
     real(prec)      :: dz, dm, am
-    real(prec)      :: surf_temp, surf_dens, solid_acc
+    real(prec)      :: surf_dens
+    real(prec)      :: surf_temp
+    real(prec)      :: surf_grain
+    real(prec)      :: solid_acc
 
 
     call tfm_num_assign(np, props, p)
 
-    surf_temp = forcing(3)
-    surf_dens = forcing(4)
-    solid_acc = forcing(5)
+    surf_temp  = forcing(3)
+    surf_dens  = forcing(4)
+    solid_acc  = forcing(5)
+    surf_grain = forcing(7)
 
     ! mass to be removed or added
     dm = solid_acc * dt * WATER_DENSITY
@@ -379,19 +435,21 @@ module tfm_num
     ! theres accumulation and the maximum number of elements is reached
     if ( nz == np .and. dm > 0.0 ) then
 
-      p%depth(1:nz-1)       = p%depth(2:nz)
-      p%density(1:nz-1)     = p%density(2:nz)
-      p%temperature(1:nz-1) = p%temperature(2:nz)
-      p%liquidwater(1:nz-1) = p%liquidwater(2:nz)
-      p%age(1:nz-1)         = p%age(2:nz)
+      p%depth(1:nz-1)        = p%depth(2:nz)
+      p%density(1:nz-1)      = p%density(2:nz)
+      p%temperature(1:nz-1)  = p%temperature(2:nz)
+      p%grain_radius(1:nz-1) = p%grain_radius(2:nz)
+      p%liquidwater(1:nz-1)  = p%liquidwater(2:nz)
+      p%age(1:nz-1)          = p%age(2:nz)
 
-      p%depth(nz)       = -9999.9
-      p%density(nz)     = -9999.9
-      p%temperature(nz) = -9999.9
-      p%liquidwater(nz) = -9999.9
-      p%heatcap(nz)     = -9999.9
-      p%thermcond(nz)   = -9999.9
-      p%age(nz)         = -9999.9
+      p%depth(nz)        = -9999.9
+      p%density(nz)      = -9999.9
+      p%temperature(nz)  = -9999.9
+      p%grain_radius(nz) = -9999.9
+      p%liquidwater(nz)  = -9999.9
+      p%heatcap(nz)      = -9999.9
+      p%thermcond(nz)    = -9999.9
+      p%age(nz)          = -9999.9
 
       nz = nz - 1
     end if
@@ -414,13 +472,14 @@ module tfm_num
 
       ! add new layer
       nz = nz + 1
-      p%depth(nz)       = p%depth(nz-1) + dz
-      p%density(nz)     = surf_dens
-      p%temperature(nz) = surf_temp
-      p%heatcap(1:nz)   = models%heatcap_model(nz)
-      p%thermcond(1:nz) = models%thermcond_model(nz, p%density(1:nz))
-      p%liquidwater(nz) = 0.0_prec
-      p%age(nz)         = 0.0_prec
+      p%depth(nz)        = p%depth(nz-1) + dz
+      p%density(nz)      = surf_dens
+      p%temperature(nz)  = surf_temp
+      p%grain_radius(nz) = surf_grain
+      p%heatcap(1:nz)    = models%heatcap_model(nz)
+      p%thermcond(1:nz)  = models%thermcond_model(nz, p%density(1:nz))
+      p%liquidwater(nz)  = 0.0_prec
+      p%age(nz)          = 0.0_prec
 
 
     ! theres ablation
@@ -441,6 +500,11 @@ module tfm_num
       &  p%depth(n), p%depth(n-1),             &
       &  p%temperature(n), p%temperature(n-1), &
       &  dz, p%temperature(n)                  &
+      )
+      call tfm_num_lin_interp(                   &
+      &  p%depth(n), p%depth(n-1),               &
+      &  p%grain_radius(n), p%grain_radius(n-1), &
+      &  dz, p%grain_radius(n)                   &
       )
       call tfm_num_lin_interp(                 &
       &  p%depth(n), p%depth(n-1),             &
@@ -468,13 +532,14 @@ module tfm_num
       nz = n
 
       ! fill removed layers with NaN value
-      p%depth(nz+1:np)       = -9999.9
-      p%density(nz+1:np)     = -9999.9
-      p%temperature(nz+1:np) = -9999.9
-      p%liquidwater(nz+1:np) = -9999.9
-      p%heatcap(nz+1:np)     = -9999.9
-      p%thermcond(nz+1:np)   = -9999.9
-      p%age(nz+1:np)         = -9999.9
+      p%depth(nz+1:np)        = -9999.9
+      p%density(nz+1:np)      = -9999.9
+      p%temperature(nz+1:np)  = -9999.9
+      p%grain_radius(nz+1:np) = -9999.9
+      p%liquidwater(nz+1:np)  = -9999.9
+      p%heatcap(nz+1:np)      = -9999.9
+      p%thermcond(nz+1:np)    = -9999.9
+      p%age(nz+1:np)          = -9999.9
     end if
   end subroutine tfm_num_surface
 

@@ -26,11 +26,12 @@ program kohnen03
 
   ! model initialization
   call tfm_num_modelinit(                    &
-  &  solve_density='timmsfit',               &
+  &  solve_density='arthern2010',            &
   &  solve_temperature='true',               &
   &  solve_heat_capacity='paterson1994',     &
   &  solve_thermal_conductivity='sturm2007', &
   &  solve_liquid='bucket',                  &
+  &  solve_grain_growth='arthern2010',       &
   &  models=models                           &
   )
 
@@ -39,10 +40,11 @@ program kohnen03
   np = nz + nt
 
   ! forcing import
-  allocate(forcing(6,nt), runoff(nt))
+  allocate(forcing(7,nt), runoff(nt))
   call kohnen03_import_forcing(FORC_INP, nt, forcing)
   forcing(1,:) = 0.0_prec
   forcing(6,:) = 0.0_prec
+  forcing(7,:) = 0.0005_prec
   
   ! init import
   allocate(props(8,np))
@@ -126,7 +128,7 @@ subroutine kohnen03_import_forcing(forc_file, nt, forcing)
 
   character(len=*), intent(in)               :: forc_file
   integer, intent(in)                        :: nt
-  real(prec), dimension(6,nt), intent(inout) :: forcing
+  real(prec), dimension(7,nt), intent(inout) :: forcing
 
   integer :: n
 
