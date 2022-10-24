@@ -21,7 +21,6 @@ module tfm_density_tools
 !
 ! Subroutines:
 !   tfm_density_lin_interp: Simple linear interpolation.
-!   tfm_density_do_nothing: Does nothing to a given variable.
 !   tfm_density_bagmean: Bagmean from firn profile.
 ! ---------------------------------------------------------------------
 
@@ -130,29 +129,6 @@ module tfm_density_tools
 
     v = v0 + ((v1 - v0) / (z1 - z0)) * dz
   end subroutine tfm_density_lin_interp
-
-
-  subroutine tfm_density_do_nothing(nz, variable)
-    implicit none
-
-    integer, intent(in) :: nz
-    real(prec), dimension(nz), intent(in) :: variable
-    real(prec), dimension(nz)             :: nothing
-! ---------------------------------------------------------------------
-! Subroutine: tfm_density_do_nothing
-!
-! Routine to do "nothing" with a given variable. Used to avoid warnings
-! at compile time.
-!
-! Author: Timm Schultz
-!
-! Arguments:
-!   nz: Dimension of the given variable.
-!   variable: Variable to do nothing about.
-! ---------------------------------------------------------------------
-
-    nothing = variable
-  end subroutine tfm_density_do_nothing
 
 
   subroutine tfm_density_bagmean(nz, depth, density, dz, mz, bagmean)
@@ -1621,8 +1597,8 @@ module tfm_density
 ! ----------------------------------------------------------------------
 
     ! doing nothing
-    call tfm_density_do_nothing(nz, age)
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! stress
     call tfm_density_computeStress(nz, depth, density, stress)
@@ -1769,8 +1745,8 @@ module tfm_density
 ! ----------------------------------------------------------------------
 
     ! doing nothing
-    call tfm_density_do_nothing(nz, age)
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! stress
     call tfm_density_computeStress(nz, depth, density, stress)
@@ -1907,8 +1883,8 @@ module tfm_density
 !-----------------------------------------------------------------------
 
     ! doing nothing
-    call tfm_density_do_nothing(nz, age)
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! stress
     call tfm_density_computeStress(nz, depth, density, stress)
@@ -2038,8 +2014,8 @@ module tfm_density
 !-----------------------------------------------------------------------
 
     ! doing nothing
-    call tfm_density_do_nothing(nz, age)
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! stress
     call tfm_density_computeStress(nz, depth, density, stress)
@@ -2207,8 +2183,8 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 !-----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, age)
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     rel_density = density / ICE_DENSITY
 
@@ -2390,7 +2366,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -2462,7 +2438,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! call Herron & Langway model
     call tfm_density_HLtype(  &
@@ -2518,7 +2494,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, age)
+    call tfm_essentials_do_nothing(nz, age)
 
     ! computation of the current stress state
     call tfm_density_computeStress(nz, depth, density, stress)
@@ -2633,7 +2609,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -2725,7 +2701,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! 10 m temperature
     do n = nz, 1, -1
@@ -2810,7 +2786,7 @@ module tfm_density
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
 
-    call tfm_density_do_nothing(nz, grain_radius)
+    call tfm_essentials_do_nothing(nz, grain_radius)
 
     ! 10 m temperature
     do n = nz, 1, -1
