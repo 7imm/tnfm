@@ -1,5 +1,5 @@
 module tfm_constants
-  use settings
+  use tfm_essentials 
   implicit none
 
   ! acceleration due to gravity (kg / m s**2)

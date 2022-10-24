@@ -1,11 +1,11 @@
 module tfm_grain
-  use settings
+  use tfm_essentials 
   use tfm_constants
   implicit none
 ! ----------------------------------------------------------------------
 ! Module: tfm_grain
 !
-! Dependencies: settings, tfm_constants
+! Dependencies: tfm_essentials, tfm_constants
 !
 ! Functions:
 !  tfm_grain_arthern2010: Arthern et al. (2010)
@@ -109,4 +109,16 @@ module tfm_grain
     &  d_grain_radius       &
     )
   end function tfm_grain_arthern2010
+
+
+!  function tfm_grain_li2002(nz, dt, depth, density, temperature) &
+!    & result(d_grain_radius)
+!    implicit none
+!
+!    integer, intent(in)                   :: nz
+!    real(prec), intent(in)                :: dt
+!    real(prec), dimension(nz), intent(in) :: depth
+!    real(prec), dimension(nz), intent(in) :: density
+!    real(prec), dimension(nz), intent(in) :: temperature
+!  end function tfm_grain_li2002
 end module tfm_grain

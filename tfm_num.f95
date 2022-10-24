@@ -1,5 +1,5 @@
 module tfm_num
-  use settings
+  use tfm_essentials 
   use tfm_constants
   use tfm_liquid
   use tfm_temperature
@@ -12,7 +12,7 @@ module tfm_num
   interface
     subroutine liquid_inter(nz, dt, depth, density, temperature, &
       &liquid_water, infiltration_rate, runoff)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
@@ -31,7 +31,7 @@ module tfm_num
   ! interface for densification function
   interface
     function density_inter(nz, dz, depth, density, temperature, age, grain_radius)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
@@ -51,7 +51,7 @@ module tfm_num
   interface
     function temperature_inter(nz, dt, depth, density, temperature, &
       & heat_capacity, thermal_conductivity)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
@@ -70,7 +70,7 @@ module tfm_num
   ! interface for heat capacity
   interface
     function heatcap_inter(nz)
-      use settings
+      use tfm_essentials
       implicit none
       
       integer, intent(in)       :: nz
@@ -82,7 +82,7 @@ module tfm_num
   ! interface for thermal conductivity
   interface
     function thermcond_inter(nz, density)
-      use settings
+      use tfm_essentials
       implicit none
       
       integer, intent(in)                   :: nz
@@ -95,7 +95,7 @@ module tfm_num
   ! interface for grain growth
   interface
     function grain_growth_inter(nz, dt, temperature)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz

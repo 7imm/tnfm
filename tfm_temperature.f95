@@ -1,5 +1,5 @@
 module tfm_temperature
-  use settings
+  use tfm_essentials
   implicit none
 
 

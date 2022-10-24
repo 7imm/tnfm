@@ -1,5 +1,5 @@
 module tfm_output
-  use settings
+  use tfm_essentials
   use netcdf
   implicit none
 
@@ -116,7 +116,7 @@ end module tfm_output
 
 
 module tfm_tools
-  use settings
+  use tfm_essentials 
   implicit none
   contains
 

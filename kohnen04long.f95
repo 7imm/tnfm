@@ -1,5 +1,5 @@
 program kohnen03
-  use settings
+  use tfm_essentials
   use tfm_num
   use tfm_tools
   implicit none
@@ -105,7 +105,7 @@ end program kohnen03
 
 
 subroutine kohnen03_import_init(init_file, nz, props)
-  use settings
+  use tfm_essentials
   implicit none
 
   character(len=*), intent(in)               :: init_file
@@ -123,7 +123,7 @@ end subroutine kohnen03_import_init
 
 
 subroutine kohnen03_import_forcing(forc_file, nt, forcing)
-  use settings
+  use tfm_essentials 
   implicit none
 
   character(len=*), intent(in)               :: forc_file

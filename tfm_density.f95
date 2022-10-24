@@ -1,5 +1,5 @@
 module tfm_density_tools
-  use settings
+  use tfm_essentials
   use tfm_constants
   implicit none
 ! ---------------------------------------------------------------------
@@ -8,7 +8,7 @@ module tfm_density_tools
 ! This module contains procedures commonly used by density related
 ! functions and subroutines.
 !
-! Dependencies: settings, tfm_constants
+! Dependencies: tfm_essentials, tfm_constants
 !
 ! Interfaces:
 !   tfm_density_arrhenius: Interface for functions
@@ -214,7 +214,7 @@ end module tfm_density_tools
 
 
 module tfm_density_stress
-  use settings
+  use tfm_essentials
   use tfm_constants
   implicit none
 ! ---------------------------------------------------------------------
@@ -222,7 +222,7 @@ module tfm_density_stress
 !
 ! The module contains common stress related procedures.
 !
-! Dependencies: settings, tfm_constants
+! Dependencies: tfm_essentials, tfm_constants
 !
 ! Functions:
 !  tfm_density_boyleMariotte: Boyle-Mariotte factor from absolute
@@ -336,7 +336,7 @@ end module tfm_density_stress
 
 
 module tfm_density_processes
-  use settings
+  use tfm_essentials 
   use tfm_constants
   use tfm_density_tools
   use tfm_density_stress
@@ -359,7 +359,7 @@ module tfm_density_processes
 ! Sheet Mass Balance. Climate Change, 40, 605-&24, (1998). https://
 ! doi.org/10.1023/A:1005320713306
 !
-! Dependencies: settings, tfm_constants, tfm_density_tools,
+! Dependencies: tfm_essentials, tfm_constants, tfm_density_tools,
 !               tfm_density_stress
 !
 ! Parameters (see Arthern & Wingham, 1998):
@@ -753,7 +753,7 @@ end module tfm_density_processes
 
 
 module tfm_density_herronLangway
-  use settings
+  use tfm_essentials 
   use tfm_constants
   implicit none
 ! ---------------------------------------------------------------------
@@ -767,7 +767,7 @@ module tfm_density_herronLangway
 ! Model. Journal of Glaciology, 25 (93), 373-385, (1980). https://
 ! doi.org/10.3189/S0022143000015239
 !
-! Dependencies: settings, tfm_constants
+! Dependencies: tfm_essentials, tfm_constants
 !
 ! Subroutines:
 !   tfm_density_mean_acc: Mean accumulation rate over firn parcel life
@@ -927,7 +927,7 @@ end module tfm_density_herronLangway
 
 
 module tfm_density_fischmeisterArzt
-  use settings
+  use tfm_essentials
   use tfm_constants
   implicit none
 
@@ -956,7 +956,7 @@ module tfm_density_fischmeisterArzt
 ! deformation. Powder Metallurgy, 26 (2), 82-88, (1983).
 ! https://doi.org/10.1179/pom.1983.26.2.82
 !
-! Dependencies: settings, tfm_constants
+! Dependencies: tfm_essentials, tfm_constants
 ! 
 ! Interfaces:
 !   tfm_density_arztCoordination: Interface for coordination number
@@ -1156,7 +1156,7 @@ end module tfm_density_fischmeisterArzt
 
 
 module tfm_density_gagliardini
-  use settings
+  use tfm_essentials
   use tfm_constants
   use tfm_density_tools
 
@@ -1165,7 +1165,7 @@ module tfm_density_gagliardini
   interface
     function invariant_inter(nz, param_a, param_b, strain_rate_inp) &
       & result(invariant)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                             :: nz
@@ -1181,7 +1181,7 @@ module tfm_density_gagliardini
   interface
     function viscosity_inter(nz, param, rate_factor, invariant) &
       & result(viscosity)
-      use settings
+      use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
@@ -1208,7 +1208,7 @@ module tfm_density_gagliardini
 ! materials by power-law creep. Mechanics of Materials, 17 (1), 25-32,
 ! (1994). https://doi.org/10.1016/0167-6636(94)90011-6
 !
-! Dependencies: settings, tfm_constants, tfm_denisty_tools
+! Dependencies: tfm_essentials, tfm_constants, tfm_denisty_tools
 ! 
 ! Interfaces:
 !   invariant_inter: Interface for the invariant function.
@@ -1489,7 +1489,7 @@ end module tfm_density_gagliardini
 
 
 module tfm_density
-  use settings
+  use tfm_essentials
   use tfm_constants
   use tfm_density_tools
   use tfm_density_herronLangway
@@ -1507,7 +1507,7 @@ module tfm_density
 ! pass them via a suitable interface. This means that some arguments
 ! may not be used by the function.
 !
-! Dependencies: settings, tfm_constants, tfm_density_tools,
+! Dependencies: tfm_essentials, tfm_constants, tfm_density_tools,
 !               tfm_density_herronLangway, tfm_density_stress,
 !               tfm_density_fischmeisterArzt, tfm_density_processes,
 !               tfm_density_gagliardini
