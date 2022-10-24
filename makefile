@@ -7,7 +7,7 @@ merra2.o: merra2.f95 tfm_essentials.o tfm_tools.o
 tfm_tools.o: tfm_tools.f95 tfm_essentials.o 
 	$(FC) $(FLAGS) -c -I/usr/include tfm_tools.f95
 
-tfm_essentials.o: tfm_essentials.f95
+tfm_essentials.o: tfm_essentials.f95 tfm_constants.o
 	$(FC) $(FLAGS) -c tfm_essentials.f95
 
 tfm_density.o: tfm_density.f95 tfm_essentials.o tfm_constants.o
@@ -28,7 +28,7 @@ tfm_num.o: tfm_num.f95 tfm_essentials.o tfm_constants.o tfm_liquid.o tfm_tempera
 tfm_preprocessing.o: tfm_preprocessing.f95 tfm_essentials.o tfm_constants.o
 	$(FC) $(FLAGS) -c tfm_preprocessing.f95
 
-tfm_constants.o: tfm_constants.f95 tfm_essentials.o
+tfm_constants.o: tfm_constants.f95
 	$(FC) $(FLAGS) -c tfm_constants.f95
 
 kohnen04long: kohnen04long.f95 tfm_essentials.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_density.o tfm_tools.o

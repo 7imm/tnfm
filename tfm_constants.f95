@@ -1,6 +1,8 @@
 module tfm_constants
-  use tfm_essentials 
   implicit none
+
+  ! precision
+  integer, parameter :: prec = selected_real_kind(8)
 
   ! acceleration due to gravity (kg / m s**2)
   real(prec), parameter :: ACC_GRAVITY = 9.81_prec

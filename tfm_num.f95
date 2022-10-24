@@ -94,12 +94,14 @@ module tfm_num
 
   ! interface for grain growth
   interface
-    function grain_growth_inter(nz, dt, temperature)
+    function grain_growth_inter(nz, dt, depth, density, temperature)
       use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
       real(prec), intent(in)                :: dt
+      real(prec), dimension(nz), intent(in) :: depth
+      real(prec), dimension(nz), intent(in) :: density
       real(prec), dimension(nz), intent(in) :: temperature
 
       real(prec), dimension(nz) :: grain_growth_inter
@@ -243,6 +245,8 @@ module tfm_num
         models%grain_model => null()
       else if ( solve_grain_growth == 'arthern2010' ) then
         models%grain_model => tfm_grain_arthern2010
+      else if ( solve_grain_growth == 'li2002' ) then
+        models%grain_model => tfm_grain_li2002
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -361,7 +365,10 @@ module tfm_num
       if ( associated(models%grain_model) ) then
         d_grain_radius = models%grain_model( &
         &  nz, dt,                           &
+        &  depth=n_depth,                    &
+        &  density=n_density,                &
         &  temperature=n_temperature         &
+
         )
         residuum(5) = maxval(abs(                             &
         &  n_grain_radius - (p%grain_radius + d_grain_radius) &

@@ -68,7 +68,8 @@ module tfm_grain
   end subroutine tfm_grain_gowType
   
 
-  function tfm_grain_arthern2010(nz, dt, temperature) result(d_grain_radius)
+  function tfm_grain_arthern2010(nz, dt, depth, density, temperature) &
+    & result(d_grain_radius)
     implicit none
 
     ! Parameters from Arthern & Wingham (2010) following Paterson (1994)
@@ -77,6 +78,8 @@ module tfm_grain
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
 
     real(prec), dimension(nz) :: d_grain_radius
@@ -100,6 +103,9 @@ module tfm_grain
 !   d_grain_radius: Grain radius change along the firn profile (m).
 ! ----------------------------------------------------------------------
     
+    call tfm_essentials_do_nothing(nz, depth)
+    call tfm_essentials_do_nothing(nz, density)
+    
     call tfm_grain_gowType( &
     &  nz,                  &
     &  dt,                  &
@@ -111,14 +117,17 @@ module tfm_grain
   end function tfm_grain_arthern2010
 
 
-!  function tfm_grain_li2002(nz, dt, depth, density, temperature) &
-!    & result(d_grain_radius)
-!    implicit none
-!
-!    integer, intent(in)                   :: nz
-!    real(prec), intent(in)                :: dt
-!    real(prec), dimension(nz), intent(in) :: depth
-!    real(prec), dimension(nz), intent(in) :: density
-!    real(prec), dimension(nz), intent(in) :: temperature
-!  end function tfm_grain_li2002
+  function tfm_grain_li2002(nz, dt, depth, density, temperature) &
+    & result(d_grain_radius)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+
+    real(prec), dimension(nz) :: d_grain_radius
+
+  end function tfm_grain_li2002
 end module tfm_grain

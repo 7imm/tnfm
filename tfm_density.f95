@@ -746,59 +746,11 @@ module tfm_density_herronLangway
 ! Dependencies: tfm_essentials, tfm_constants
 !
 ! Subroutines:
-!   tfm_density_mean_acc: Mean accumulation rate over firn parcel life
-!                         time.
 !   tfm_density_HLtype: Generic function for Herron & Langway type
 !                       models.
 ! ---------------------------------------------------------------------
 
   contains
-
-
-  subroutine tfm_density_mean_acc(nz, depth, density, age, mean_acc)
-    implicit none
-
-    integer, intent(in)                      :: nz
-    real(prec), dimension(nz), intent(in)    :: depth
-    real(prec), dimension(nz), intent(in)    :: density
-    real(prec), dimension(nz), intent(in)    :: age
-    real(prec), dimension(nz), intent(inout) :: mean_acc
-
-    integer :: n
-! ---------------------------------------------------------------------
-! Subroutine: tfm_density_mean_acc
-!
-! The subroutine computes the mean accumulation rate from the age of
-! the firn profile. The concept follows the idea of calculating the
-! mean accumulation rate over the life time of a firn parcel.
-!
-! See for example:
-! Stevens, C. M., Verjans, V., Lunding, J. M. D., Kahle, E. C.,
-! Horlings, A. N., Horlings, B. I., and Waddington, E. D. The Community
-! Firn Model (CFM) v1.0. Geosci. Model. Dev., 13, 4355-4377, (2020).
-! https://doi.org/10.5194/gmd-13-4355-2020
-! 
-! Author: Timm Schultz
-!
-! Arguments:
-!   nz: Dimension of variables "depth", "density", "age", "mean_acc".
-!   depth: Depth of the firn profile (m).
-!   density: Density of the firn profile (kg m**-3).
-!   age: Age of the firn profile (s).
-!   mean_acc - on input: Variable to store the mean accmulation rate.
-!
-! Result:
-!   mean_acc - on output: Mean accumulation rate (m weq. a**-1).
-! ---------------------------------------------------------------------
-
-    mean_acc(nz) = 0.0
-    do n = nz - 1, 1, -1
-      mean_acc(n) = (depth(n+1) - depth(n)) * (density(n) / WATER_DENSITY)
-      mean_acc(n) = mean_acc(n) + mean_acc(n+1)
-    end do
-
-    mean_acc(1:nz-1) = mean_acc(1:nz-1) / (age(1:nz-1) / SECONDS_YEAR)
-  end subroutine tfm_density_mean_acc
 
 
   subroutine tfm_density_HLtype(nz, dt, stage1_params, &
@@ -859,7 +811,7 @@ module tfm_density_herronLangway
 
     ! computation of the mean accumulation rate 
     ! over the lifetime of the firn parcel (kg a-1 m-2)
-    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    call tfm_essentials_mean_acc(nz, depth, density, age, mean_acc)
     mean_acc = mean_acc * WATER_DENSITY
 
     ! boundary between first and seconds stage
@@ -2860,7 +2812,7 @@ module tfm_density
     end do
 
     ! change accumulation to (kg a-1 m-2)
-    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    call tfm_essentials_mean_acc(nz, depth, density, age, mean_acc)
     mean_acc = mean_acc * WATER_DENSITY
 
     d_density(n+1:nz-1) = (                             &
@@ -2931,7 +2883,7 @@ module tfm_density
     end do
 
     ! change accumulation to (kg a-1 m-2)
-    call tfm_density_mean_acc(nz, depth, density, age, mean_acc)
+    call tfm_essentials_mean_acc(nz, depth, density, age, mean_acc)
     mean_acc = mean_acc * WATER_DENSITY
 
     ! 10 m temperature
