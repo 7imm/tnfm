@@ -68,8 +68,7 @@ module tfm_grain
   end subroutine tfm_grain_gowType
   
 
-  function tfm_grain_arthern2010(nz, dt, depth, density, temperature) &
-    & result(d_grain_radius)
+  function tfm_grain_arthern2010(nz, dt, temperature) result(d_grain_radius)
     implicit none
 
     ! Parameters from Arthern & Wingham (2010) following Paterson (1994)
@@ -78,13 +77,11 @@ module tfm_grain
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), dimension(nz), intent(in) :: depth
-    real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
 
     real(prec), dimension(nz) :: d_grain_radius
 ! ----------------------------------------------------------------------
-! Function: tfm_density_arthern2010
+! Function: tfm_grain_arthern2010
 !
 ! Arthern, R. J., Vaughan, D. G., Rankin, A. M., Mulvaney, R., and
 ! Thomas, E. R. In situ measurements of Antarctic snow compaction
@@ -94,17 +91,13 @@ module tfm_grain
 ! Author: Timm Schultz
 !
 ! Arguments:
-!   nz: Dimension of vairbales "temperature" and "grain radius".
+!   nz: Dimension of vairbales "temperature" and "d_grain radius".
 !   dt: Time step (s).
 !   temperature: Temperature along the firn profile (K).
-!   grain_radius: Grain radius along the firn profile (m).
 !
 ! Result:
 !   d_grain_radius: Grain radius change along the firn profile (m).
 ! ----------------------------------------------------------------------
-    
-    call tfm_essentials_do_nothing(nz, depth)
-    call tfm_essentials_do_nothing(nz, density)
     
     call tfm_grain_gowType( &
     &  nz,                  &
@@ -117,17 +110,51 @@ module tfm_grain
   end function tfm_grain_arthern2010
 
 
-  function tfm_grain_li2002(nz, dt, depth, density, temperature) &
-    & result(d_grain_radius)
+  function tfm_grain_zwally2002(nz, dt, temperature) result(d_grain_radius)
     implicit none
 
     integer, intent(in)                   :: nz
     real(prec), intent(in)                :: dt
-    real(prec), dimension(nz), intent(in) :: depth
-    real(prec), dimension(nz), intent(in) :: density
     real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz)             :: d_grain_radius
 
-    real(prec), dimension(nz) :: d_grain_radius
+    real(prec), dimension(nz) :: growth_rate
+! ----------------------------------------------------------------------
+! Function: tfm_grain_li2002
+!
+! Grain growth following Zwally & Li (2002) as described in
+! Li & Zwally (2011).
+!
+! Zwally, H. J. and Li, J. Seasonal and interannual variations of firn
+! densification and ice-sheet elevation at the Greenland summit.
+! Journal of Glaciology, 48 (171), (2002).
+! https://doi.org/10.3189/172756502781831403
+!
+! Li, J. and Zwally, H. J. Modeling of firn compaction for estimating
+! ice-sheet mass change from observed ice-sheet elevation change. Annals
+! of Glaciology, 52 (59), (2011).
+! https://doi.org/10.3189/172756411799096321
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   nz: Dimension of the variables "temperature" and "d_grain_radius".
+!   dt: Time step (s).
+!   temperature: Temperature along the firn profile (K).
+!
+! Result:
+!   d_grain_radius: Grain radius change along the firn profile (m).
+! ----------------------------------------------------------------------
 
-  end function tfm_grain_li2002
+    ! growth rate (mm**2 a**-1)
+    growth_rate = 8.36_prec * ((273.2_prec - temperature)**(-2.061_prec))
+
+    ! growth rate (mm**2 a**-1) -> (mm a**-1) -> (m s**-1)
+    growth_rate = (growth_rate / PI)**0.5_prec
+    growth_rate = (growth_rate * 1.0e-3_prec) / SECONDS_YEAR
+
+    ! change in grain radius
+    d_grain_radius = (dt * growth_rate)
+
+  end function tfm_grain_zwally2002
 end module tfm_grain

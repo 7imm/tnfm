@@ -31,7 +31,7 @@ program kohnen03
   &  solve_heat_capacity='paterson1994',     &
   &  solve_thermal_conductivity='sturm2007', &
   &  solve_liquid='bucket',                  &
-  &  solve_grain_growth='li2002',            &
+  &  solve_grain_growth='zwally2002',        &
   &  models=models                           &
   )
 
