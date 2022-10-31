@@ -569,11 +569,11 @@ module tfm_num
     p%depth        => props(1,:)
     p%density      => props(2,:)
     p%temperature  => props(3,:)
-    p%heatcap      => props(4,:)
-    p%thermcond    => props(5,:)
-    p%liquidwater  => props(6,:)
-    p%age          => props(7,:)
-    p%grain_radius => props(8,:)
+    p%grain_radius => props(4,:)
+    p%liquidwater  => props(5,:)
+    p%age          => props(6,:)
+    p%heatcap      => props(7,:)
+    p%thermcond    => props(8,:)
   end subroutine tfm_num_assign
 
 

@@ -50,8 +50,8 @@ program kohnen03
   allocate(props(8,np))
   props = -999999.9
   call kohnen03_import_init(INIT_INP, nz, props(:,1:nz))
-  props(6,:) = 0.0_prec
-  props(8,:) = 0.0005_prec
+  props(5,:) = 0.0_prec
+  props(4,:) = 0.0005_prec
 
   ! output file
   open(333, file='kohnen04.out', status='replace', action='write')
@@ -116,7 +116,7 @@ subroutine kohnen03_import_init(init_file, nz, props)
 
   open(111, file=init_file, action='read')
     do n = 1, nz, 1
-      read(111,*) props(1,n), props(2,n), props(3,n), props(7,n)
+      read(111,*) props(1,n), props(2,n), props(3,n), props(6,n)
     end do
   close(111)
 end subroutine kohnen03_import_init
