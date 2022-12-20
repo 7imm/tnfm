@@ -40,6 +40,7 @@ program tfm_example
   integer    :: np = 0
   integer    :: tic, toc
   integer    :: t
+  integer    :: n
   real(prec) :: rate
 
 
@@ -138,12 +139,12 @@ program tfm_example
       &  props              &
       )
 
-      call tfm_num_step(         &
-      &  nz, time_step,          &
-      &  models=models,          &
-      &  props=props(:,1:nz),    &
-      &  runoff=runoff(1),       &
-      &  liquid_acc=forcing(6,t) &
+      call tfm_num_step(              &
+      &  nz, time_step,               &
+      &  models=models,               &
+      &  props=props(:,1:nz),         &
+      &  runoff=runoff(1),            &
+      &  liquid_acc=spinup_forcing(6) &
       )
     end do
     
@@ -176,6 +177,13 @@ program tfm_example
   call system_clock(toc, rate)
   print *, ''
   write(*, '(a,f10.2,a)') 'time elapsed: ', real(toc - tic) / real(rate), ' s'
+
+  ! simple output
+  open(333, file='tfm.out', status='replace', action='write')
+  do n = nz, 1, -1
+    write(333,*) props(1,n), props(2,n), props(3,n), props(6,n), props(7,n)
+  end do
+  close(333)
 
   ! memoray deallocation
   deallocate(forcing, props, runoff)

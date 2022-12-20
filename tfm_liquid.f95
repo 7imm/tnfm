@@ -19,7 +19,7 @@ module tfm_liquid
     real(prec), dimension(nz), intent(inout) :: density
     real(prec), dimension(nz), intent(inout) :: temperature
     real(prec), dimension(nz), intent(inout) :: liquid_water
-    real(prec), intent(inout)               :: runoff
+    real(prec), intent(inout)                :: runoff
 
     integer    :: n
     real(prec) :: water

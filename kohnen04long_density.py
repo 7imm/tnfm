@@ -18,12 +18,12 @@ kohnen_dens  = data[:,1]
 
 
 # simulation results
-data = './kohnen04.out'
+data = './tfm.out'
 data = np.genfromtxt(data, skip_footer=1)
 depth = data[:,0]
 dens  = data[:,1]
 temp  = data[:,2]
-depth = depth - depth[-1]
+depth = depth - depth[0]
 
 # bagmean
 dz = 1.0
