@@ -5,6 +5,7 @@ module tfm_num
   use tfm_temperature
   use tfm_grain
   use tfm_density
+  use tfm_llStructure
   implicit none
 
 
@@ -256,52 +257,77 @@ module tfm_num
   end subroutine tfm_num_modelinit
 
   
-  subroutine tfm_num_step(nz, dt, models, props, runoff, liquid_acc)
-
+  subroutine tfm_num_step(dt, models, props, runoff, liquid_acc)
     implicit none
 
-    integer, intent(in)    :: nz
-    real(prec), intent(in) :: dt
+    real(prec), intent(in)              :: dt
+    type(sim_models), intent(in)        :: models
+    type(llProps), intent(inout)        :: props
+    real(prec), intent(inout), optional :: runoff
+    real(prec), intent(in), optional    :: liquid_acc
 
-    type(sim_models), intent(in)               :: models
-    real(prec), dimension(8,nz), intent(inout) :: props
-    real(prec), intent(inout), optional        :: runoff
-
-    real(prec), intent(in), optional :: liquid_acc
-
-    type(sim_props)           :: p
+    integer                   :: nz
     integer                   :: n, m
     real(prec), dimension(6)  :: residuum
-    real(prec), dimension(nz) :: dens_residuum
-    real(prec), dimension(nz) :: d_density, n_density
-    real(prec), dimension(nz) :: d_temperature, n_temperature
-    real(prec), dimension(nz) :: d_depth, n_depth
-    real(prec), dimension(nz) :: d_grain_radius, n_grain_radius
-    real(prec), dimension(nz) :: n_heat_capacity
-    real(prec), dimension(nz) :: n_thermal_conductivity
-    real(prec), dimension(nz) :: n_age
 
-    call tfm_num_assign(nz, props, p)
+    real(prec), dimension(props%depth%length)        :: depth
+    real(prec), dimension(props%density%length)      :: density
+    real(prec), dimension(props%temperature%length)  :: temperature
+    real(prec), dimension(props%grain_radius%length) :: grain_radius
+    real(prec), dimension(props%heatcap%length)      :: heat_capacity
+    real(prec), dimension(props%thermcond%length)    :: thermal_conductivity
+    real(prec), dimension(props%liquidwater%length)  :: liquidwater
+    real(prec), dimension(props%age%length)          :: age
+
+    real(prec), dimension(props%depth%length)        :: n_depth
+    real(prec), dimension(props%density%length)      :: n_density
+    real(prec), dimension(props%temperature%length)  :: n_temperature
+    real(prec), dimension(props%grain_radius%length) :: n_grain_radius
+    real(prec), dimension(props%heatcap%length)      :: n_heat_capacity
+    real(prec), dimension(props%thermcond%length)    :: n_thermal_conductivity
+    real(prec), dimension(props%liquidwater%length)  :: n_liquidwater
+    real(prec), dimension(props%age%length)          :: n_age
+
+    real(prec), dimension(props%depth%length)        :: d_depth
+    real(prec), dimension(props%density%length)      :: d_density
+    real(prec), dimension(props%temperature%length)  :: d_temperature
+    real(prec), dimension(props%grain_radius%length) :: d_grain_radius
+    real(prec), dimension(props%density%length)      :: dens_residuum
 
     ! initialization
-    n_depth = p%depth
-    n_density = p%density
-    n_temperature = p%temperature
-    n_grain_radius = p%grain_radius
-    n_heat_capacity = p%heatcap
-    n_thermal_conductivity = p%thermcond
-    n_age = p%age
-    d_density = 0.0_prec
-    d_temperature = 0.0_prec
-    d_grain_radius = 0.0_prec
-    residuum = 0.0_prec
-    residuum(1) = -9999.9
+    nz                   = props%depth%length
+    depth                = llGetData(props%depth)
+    density              = llGetData(props%density)
+    temperature          = llGetData(props%temperature)
+    grain_radius         = llGetData(props%grain_radius)
+    heat_capacity        = llGetData(props%heatcap)
+    thermal_conductivity = llGetData(props%thermcond)
+    liquidwater          = llGetDAta(props%liquidwater)
+    age                  = llGetData(props%age)
 
     ! liquid model
     if ( (associated(models%liquid_model)) .and. (liquid_acc > 0.0) ) then
-      call models%liquid_model(nz, dt, p%depth, p%density, &
-        & p%temperature, p%liquidwater, liquid_acc, runoff)
+      call models%liquid_model(                    &
+      &  nz, dt,                                   &
+      &  depth, density, temperature, liquidwater, &
+      &  liquid_acc, runoff                        &
+      )
     end if
+
+    n_depth                = depth
+    n_density              = density
+    n_temperature          = temperature
+    n_grain_radius         = grain_radius
+    n_heat_capacity        = heat_capacity
+    n_thermal_conductivity = thermal_conductivity
+    n_liquidwater          = liquidwater
+    n_age                  = age
+
+    d_density      = 0.0_prec
+    d_temperature  = 0.0_prec
+    d_grain_radius = 0.0_prec
+    residuum       = 0.0_prec
+    residuum(1)    = -9999.9_prec
 
     ! Picard loop
     n = 0
@@ -309,13 +335,13 @@ module tfm_num
       
       ! density model
       if ( associated(models%dens_model) ) then
-        d_density = models%dens_model(            &
-        &  nz, dt,                                &
-        &  depth=n_depth,                         &
-        &  density=n_density,                     &
-        &  temperature=n_temperature,             &
-        &  age=n_age,                             &
-        &  grain_radius=p%grain_radius            &
+        d_density = models%dens_model( &
+        &  nz, dt,                     &
+        &  depth=n_depth,              &
+        &  density=n_density,          &
+        &  temperature=n_temperature,  &
+        &  age=n_age,                  &
+        &  grain_radius=grain_radius   &
         )
 
         ! There is the possibility that the residuum of the density is
@@ -324,7 +350,7 @@ module tfm_num
         ! densification. The density "flickers" around the value of
         ! 550 kg m-3. Therefore the residuum at this density is forced
         ! to zero, (which is not ideal).
-        dens_residuum = abs(n_density - (p%density + d_density))
+        dens_residuum = abs(n_density - (density + d_density))
         do m = 1, nz, 1
           if ( floor(n_density(m)) == 550              ) dens_residuum(m) = 0.0
           if ( floor(n_density(m)) == CLOSEOFF_DENSITY ) dens_residuum(m) = 0.0
@@ -335,13 +361,13 @@ module tfm_num
       ! heat capacity model
       if ( associated(models%heatcap_model) ) then
         n_heat_capacity = models%heatcap_model(nz)
-        !residuum(2) = maxval(abs(n_heat_capacity - p%heatcap))
+        !residuum(2) = maxval(abs(n_heat_capacity - heatcap))
       end if
 
       ! thermal conductivity model
       if ( associated(models%thermcond_model) ) then
         n_thermal_conductivity = models%thermcond_model(nz, n_density)
-        !residuum(3) = maxval(abs(n_thermal_conductivity - p%thermcond))
+        !residuum(3) = maxval(abs(n_thermal_conductivity - thermcond))
       end if
 
       ! temperature model
@@ -350,12 +376,12 @@ module tfm_num
         &  nz, dt,                                     &
         &  depth=n_depth,                              &
         &  density=n_density,                          &
-        &  temperature=p%temperature,                  &
+        &  temperature=temperature,                    &
         &  heat_capacity=n_heat_capacity,              &
         &  thermal_conductivity=n_thermal_conductivity &
         )
-        residuum(4) = maxval(abs(                          &
-        &  n_temperature - (p%temperature + d_temperature) &
+        residuum(4) = maxval(abs(                        &
+        &  n_temperature - (temperature + d_temperature) &
         ))
       end if
 
@@ -365,25 +391,25 @@ module tfm_num
         &  nz, dt,                           &
         &  temperature=n_temperature         &
         )
-        residuum(5) = maxval(abs(                             &
-        &  n_grain_radius - (p%grain_radius + d_grain_radius) &
+        residuum(5) = maxval(abs(                           &
+        &  n_grain_radius - (grain_radius + d_grain_radius) &
         ))
       end if
 
       ! depth evolution
       d_depth = tfm_density_depth( &
       &  nz,                       &
-      &  depth=p%depth,            &
-      &  density=p%density,        &
+      &  depth=depth,              &
+      &  density=density,          &
       &  d_density=d_density       &
       )
-      residuum(6) = maxval(abs(n_depth - (p%depth + d_depth)))
+      residuum(6) = maxval(abs(n_depth - (depth + d_depth)))
 
       ! reassignment
-      n_depth                = (p%depth + d_depth)
-      n_density              = (p%density + d_density)
-      n_temperature          = (p%temperature + d_temperature)
-      n_grain_radius         = (p%grain_radius + d_grain_radius)
+      n_depth                = (depth + d_depth)
+      n_density              = (density + d_density)
+      n_temperature          = (temperature + d_temperature)
+      n_grain_radius         = (grain_radius + d_grain_radius)
       n_heat_capacity        = n_heat_capacity
       n_thermal_conductivity = n_thermal_conductivity
 
@@ -391,20 +417,21 @@ module tfm_num
     end do
 
     ! raise the age
-    n_age = tfm_num_age(nz, dt, p%age)
+    n_age = tfm_num_age(nz, dt, age)
 
     ! new value
-    p%depth        = n_depth
-    p%density      = n_density
-    p%temperature  = n_temperature
-    p%grain_radius = n_grain_radius
-    p%heatcap      = n_heat_capacity
-    p%thermcond    = n_thermal_conductivity
-    p%age          = n_age
+    call llUpdateList(props%depth,        n_depth)
+    call llUpdateList(props%density,      n_density)
+    call llUpdateList(props%temperature,  n_temperature)
+    call llUpdateList(props%grain_radius, n_grain_radius)
+    call llUpdateList(props%heatcap,      n_heat_capacity)
+    call llUpdateList(props%thermcond,    n_thermal_conductivity)
+    call llUpdateList(props%age,          n_age)
+    call llUpdateList(props%liquidwater,  n_liquidwater)
   end subroutine tfm_num_step
 
 
-  subroutine tfm_num_surface(nz, np, dt, forcing, models, props)
+  subroutine tfm_num_surface(np, dt, forcing, models, props)
     implicit none
 
     integer, intent(in)                  :: np
@@ -412,20 +439,26 @@ module tfm_num
     real(prec), dimension(7), intent(in) :: forcing
     type(sim_models), intent(in)         :: models
 
-    integer, intent(inout)                     :: nz
-    real(prec), dimension(8,np), intent(inout) :: props
+    type(llProps), intent(inout) :: props
 
-    type(sim_props) :: p
-    integer         :: n
-    real(prec)      :: dz, dm, am
-    real(prec)      :: surf_dens
-    real(prec)      :: surf_temp
-    real(prec)      :: surf_grain
-    real(prec)      :: solid_acc
+    real(prec), dimension(props%depth%length)        :: depth
+    real(prec), dimension(props%density%length)      :: density
+    real(prec), dimension(props%temperature%length)  :: temperature
+    real(prec), dimension(props%heatcap%length)      :: heatcap
+    real(prec), dimension(props%thermcond%length)    :: thermcond
+    real(prec), dimension(props%grain_radius%length) :: grain_radius
+    real(prec), dimension(props%liquidwater%length)  :: liquidwater
+    real(prec), dimension(props%age%length)          :: age
 
+    integer    :: nz
+    integer    :: n
+    real(prec) :: dz, dm, am
+    real(prec) :: surf_dens
+    real(prec) :: surf_temp
+    real(prec) :: surf_grain
+    real(prec) :: solid_acc
 
-    call tfm_num_assign(np, props, p)
-
+    nz         = props%depth%length
     surf_temp  = forcing(3)
     surf_dens  = forcing(4)
     solid_acc  = forcing(5)
@@ -433,25 +466,26 @@ module tfm_num
 
     ! mass to be removed or added
     dm = solid_acc * dt * WATER_DENSITY
+    depth        = llGetData(props%depth)
+    density      = llGetData(props%density)
+    temperature  = llGetData(props%temperature)
+    heatcap      = llGetData(props%heatcap)
+    thermcond    = llGetData(props%thermcond)
+    grain_radius = llGetData(props%grain_radius)
+    liquidwater  = llGetData(props%liquidwater)
+    age          = llGetData(props%age)
 
     ! theres accumulation and the maximum number of elements is reached
     if ( nz == np .and. dm > 0.0 ) then
 
-      p%depth(1:nz-1)        = p%depth(2:nz)
-      p%density(1:nz-1)      = p%density(2:nz)
-      p%temperature(1:nz-1)  = p%temperature(2:nz)
-      p%grain_radius(1:nz-1) = p%grain_radius(2:nz)
-      p%liquidwater(1:nz-1)  = p%liquidwater(2:nz)
-      p%age(1:nz-1)          = p%age(2:nz)
-
-      p%depth(nz)        = -9999.9
-      p%density(nz)      = -9999.9
-      p%temperature(nz)  = -9999.9
-      p%grain_radius(nz) = -9999.9
-      p%liquidwater(nz)  = -9999.9
-      p%heatcap(nz)      = -9999.9
-      p%thermcond(nz)    = -9999.9
-      p%age(nz)          = -9999.9
+      call llDropData(props%depth,        1)
+      call llDropData(props%density,      1)
+      call llDropData(props%temperature,  1)
+      call llDropData(props%heatcap,      1)
+      call llDropData(props%thermcond,    1)
+      call llDropData(props%grain_radius, 1)
+      call llDropData(props%liquidwater,  1)
+      call llDropData(props%age,          1)
 
       nz = nz - 1
     end if
@@ -468,21 +502,45 @@ module tfm_num
 
       ! with very small accumulation there can occure precison problem
       ! causing two layers with the same depth
-      if ( ((p%depth(nz-1) + dz) - p%depth(nz-1)) == 0.0 ) then
+      if ( ((depth(nz-1) + dz) - depth(nz-1)) == 0.0 ) then
         RETURN
       end if
 
       ! add new layer
       nz = nz + 1
-      p%depth(nz)        = p%depth(nz-1) + dz
-      p%density(nz)      = surf_dens
-      p%temperature(nz)  = surf_temp
-      p%grain_radius(nz) = surf_grain
-      p%heatcap(1:nz)    = models%heatcap_model(nz)
-      p%thermcond(1:nz)  = models%thermcond_model(nz, p%density(1:nz))
-      p%liquidwater(nz)  = 0.0_prec
-      p%age(nz)          = 0.0_prec
 
+      call llAppendData(             &
+      &  props%depth,                &
+      &  1, (/ (depth(nz-1) + dz) /) &
+      )
+      call llAppendData(    &
+      &  props%density,     &
+      &  1, (/ surf_dens /) &
+      )
+      call llAppendData(      &
+      &  props%temperature,   &
+      &  1, (/ surf_temp /)   &
+      )
+      call llAppendData(       &
+      &  props%grain_radius,   &
+      &  1, (/ surf_grain /)   &
+      )
+      call llAppendData(                  &
+      &  props%heatcap,                   &
+      &  1, (/ models%heatcap_model(1) /) &
+      )
+      call llAppendData(                                                    &
+      &  props%thermcond,                                                   &
+      &  1, (/ models%thermcond_model(1, (/ llGetLast(props%density) /)) /) &
+      )
+      call llAppendData(      &
+      &  props%liquidwater,   &
+      &  1, (/ 0.0_prec /)    &
+      )
+      call llAppendData(   &
+      &  props%age,        &
+      &  1, (/ 0.0_prec /) &
+      )
 
     ! theres ablation
     else if ( dm < 0.0 ) then
@@ -490,58 +548,60 @@ module tfm_num
       ! removal of layers
       am = -dm
       do n = nz - 1, 1, -1
-        am = am - ((p%depth(n+1) - p%depth(n)) * p%density(n))
+        am = am - ((depth(n+1) - depth(n)) * density(n))
         if ( am <= 0.0 ) EXIT
-        dm = dm + ((p%depth(n+1) - p%depth(n)) * p%density(n))
+        dm = dm + ((depth(n+1) - depth(n)) * density(n))
       end do
-      dz = dm / p%density(n)
+      dz = dm / density(n)
       n = n + 1
 
       ! interpolation
-      call tfm_num_lin_interp(                 &
-      &  p%depth(n), p%depth(n-1),             &
-      &  p%temperature(n), p%temperature(n-1), &
-      &  dz, p%temperature(n)                  &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  temperature(n), temperature(n-1),   &
+      &  dz, temperature(n)                  &
       )
-      call tfm_num_lin_interp(                   &
-      &  p%depth(n), p%depth(n-1),               &
-      &  p%grain_radius(n), p%grain_radius(n-1), &
-      &  dz, p%grain_radius(n)                   &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  grain_radius(n), grain_radius(n-1), &
+      &  dz, grain_radius(n)                 &
       )
-      call tfm_num_lin_interp(                 &
-      &  p%depth(n), p%depth(n-1),             &
-      &  p%liquidwater(n), p%liquidwater(n-1), &
-      &  dz, p%liquidwater(n)                  &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  liquidwater(n), liquidwater(n-1),   &
+      &  dz, liquidwater(n)                  &
       )
-      call tfm_num_lin_interp(                 &
-      &  p%depth(n), p%depth(n-1),             &
-      &  p%heatcap(n), p%heatcap(n-1),         &
-      &  dz, p%heatcap(n)                      &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  heatcap(n), heatcap(n-1),           &
+      &  dz, heatcap(n)                      &
       )
-      call tfm_num_lin_interp(                 &
-      &  p%depth(n), p%depth(n-1),             &
-      &  p%thermcond(n), p%thermcond(n-1),     &
-      &  dz, p%thermcond(n)                    &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  thermcond(n), thermcond(n-1),       &
+      &  dz, thermcond(n)                    &
       )
-      call tfm_num_lin_interp(                 &
-      &  p%depth(n), p%depth(n-1),             &
-      &  p%age(n), p%age(n-1),                 &
-      &  dz, p%age(n)                          &
+      call tfm_num_lin_interp(               &
+      &  depth(n), depth(n-1),               &
+      &  age(n), age(n-1),                   &
+      &  dz, age(n)                          &
       )
-
-      ! new depth / height of the uppermost layer
-      p%depth(n) = p%depth(n) + dz
-      nz = n
 
       ! fill removed layers with NaN value
-      p%depth(nz+1:np)        = -9999.9
-      p%density(nz+1:np)      = -9999.9
-      p%temperature(nz+1:np)  = -9999.9
-      p%grain_radius(nz+1:np) = -9999.9
-      p%liquidwater(nz+1:np)  = -9999.9
-      p%heatcap(nz+1:np)      = -9999.9
-      p%thermcond(nz+1:np)    = -9999.9
-      p%age(nz+1:np)          = -9999.9
+      call llDropData(props%depth,        (nz - n))
+      call llDropData(props%density,      (nz - n))
+      call llDropData(props%temperature,  (nz - n))
+      call llDropData(props%heatcap,      (nz - n))
+      call llDropData(props%thermcond,    (nz - n))
+      call llDropData(props%grain_radius, (nz - n))
+      call llDropData(props%liquidwater,  (nz - n))
+      call llDropData(props%age,          (nz - n))
+
+      ! new depth / height of the uppermost layer
+      props%depth%tail%data(props%depth%tind - 1) = (     &
+      &  props%depth%tail%data(props%depth%tind - 1) + dz &
+      )
+      nz = n
     end if
   end subroutine tfm_num_surface
 

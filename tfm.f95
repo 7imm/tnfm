@@ -3,6 +3,7 @@ program tfm_example
   use tfm_essentials
   use tfm_num
   use tfm_tools
+  use tfm_llStructure
   implicit none
 
 
@@ -24,23 +25,28 @@ program tfm_example
   real(prec) :: time_step
   real(prec) :: spinup
 
+  real(prec), dimension(:), allocatable :: depth
+  real(prec), dimension(:), allocatable :: density
+  real(prec), dimension(:), allocatable :: temperature
+  real(prec), dimension(:), allocatable :: grain_radius
+  real(prec), dimension(:), allocatable :: age
 
   ! simulation properties
   real(prec), dimension(:,:), allocatable :: forcing
-  real(prec), dimension(:,:), allocatable :: props
   real(prec), dimension(:), allocatable   :: runoff
+  type(llProps)                           :: props
 
   real(prec), dimension(7) :: spinup_forcing
 
   type(sim_models) :: models
 
+  integer    :: n
   integer    :: nt = 0
   integer    :: snt = 0
   integer    :: nz = 0
   integer    :: np = 0
   integer    :: tic, toc
   integer    :: t
-  integer    :: n
   real(prec) :: rate
 
 
@@ -69,18 +75,15 @@ program tfm_example
     snt = 0
   end if
 
-  ! get lengths of the forcing and the init files
-  call tfm_file_length(trim(forcing_input_file), nt)
-  call tfm_file_length(trim(initial_input_file), nz)
-  np = nz + nt + snt
-
   ! forcing import
+  call tfm_file_length(trim(forcing_input_file), nt)
   allocate(forcing(7,nt), runoff(nt))
   call tfm_read_csv(trim(forcing_input_file), 7, nt, forcing)
 
   ! init import
-  allocate(props(8,np))
-  call tfm_read_csv(trim(initial_input_file), 6, nz, props(1:6,1:nz))
+  call tfm_read_init(trim(initial_input_file), props)
+  nz = props%depth%length
+  np = nz + nt + snt
 
   ! model initialization
   call tfm_num_modelinit(                                         &
@@ -92,6 +95,8 @@ program tfm_example
   &  solve_grain_growth=trim(solve_grain_growth),                 &
   &  models=models                                                &
   )
+  call llAppendData(props%heatcap, nz, models%heatcap_model(nz))
+  call llAppendData(props%thermcond, nz, models%thermcond_model(nz, llGetData(props%density)))
 
   ! freedback
   print '(a,a)', 'Model Definitions'
@@ -133,16 +138,16 @@ program tfm_example
       call tfm_tools_indicate_tstep(snt, t)
 
       call tfm_num_surface( &
-      &  nz, np, time_step, &
+      &  np, time_step,     &
       &  spinup_forcing,    &
       &  models,            &
       &  props              &
       )
 
       call tfm_num_step(              &
-      &  nz, time_step,               &
+      &  time_step,                   &
       &  models=models,               &
-      &  props=props(:,1:nz),         &
+      &  props=props,                 &
       &  runoff=runoff(1),            &
       &  liquid_acc=spinup_forcing(6) &
       )
@@ -158,16 +163,16 @@ program tfm_example
     call tfm_tools_indicate_tstep(nt, t)
 
     call tfm_num_surface( &
-    &  nz, np, time_step, &
+    &  np, time_step,     &
     &  forcing(:,t),      &
     &  models,            &
-    &  props              &
+    &  props             &
     )
 
     call tfm_num_step(         &
-    &  nz, time_step,          &
+    &  time_step,              &
     &  models=models,          &
-    &  props=props(:,1:nz),    &
+    &  props=props,            &
     &  runoff=runoff(t),       &
     &  liquid_acc=forcing(6,t) &
     )
@@ -179,14 +184,30 @@ program tfm_example
   write(*, '(a,f10.2,a)') 'time elapsed: ', real(toc - tic) / real(rate), ' s'
 
   ! simple output
+  nz = props%depth%length
+  allocate(depth(nz), density(nz), temperature(nz), grain_radius(nz), age(nz))
+  depth        = llGetData(props%depth)
+  density      = llGetData(props%density)
+  temperature  = llGetData(props%temperature)
+  grain_radius = llGetData(props%grain_radius)
+  age          = llGetData(props%age)
   open(333, file='tfm.out', status='replace', action='write')
   do n = nz, 1, -1
-    write(333,*) props(1,n), props(2,n), props(3,n), props(6,n), props(7,n)
+    write(333,*) depth(n), density(n), temperature(n), grain_radius(n), age(n)
   end do
   close(333)
+  deallocate(depth, density, temperature, grain_radius, age)
 
   ! memoray deallocation
-  deallocate(forcing, props, runoff)
+  call llFreeList(props%depth)
+  call llFreeList(props%density)
+  call llFreeList(props%temperature)
+  call llFreeList(props%heatcap)
+  call llFreeList(props%thermcond)
+  call llFreeList(props%grain_radius)
+  call llFreeList(props%liquidwater)
+  call llFreeList(props%age)
+  deallocate(forcing, runoff)
 end program tfm_example
 
 
@@ -227,3 +248,30 @@ subroutine tfm_read_csv(input_file, width, length, arr)
     end do
   close(111)
 end subroutine tfm_read_csv
+
+
+subroutine tfm_read_init(input_file, props)
+  use tfm_constants
+  use tfm_llStructure
+  implicit none
+
+  character(len=*), intent(in) :: input_file
+  type(llProps), intent(inout) :: props
+
+  integer                  :: stat
+  real(prec), dimension(6) :: init
+
+  open(111, file=input_file, action='read')
+    do
+      read(111, *, iostat=stat) init
+      if ( stat /= 0 ) EXIT
+
+      call llAppendData(props%depth,        1, init(1))
+      call llAppendData(props%density,      1, init(2))
+      call llAppendData(props%temperature,  1, init(3))
+      call llAppendData(props%grain_radius, 1, init(4))
+      call llAppendData(props%liquidwater,  1, init(5))
+      call llAppendData(props%age,          1, init(6))
+    end do
+  close(111)
+end subroutine tfm_read_init
