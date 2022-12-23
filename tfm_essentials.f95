@@ -2,18 +2,6 @@ module tfm_essentials
   use tfm_constants
   implicit none
 
-  type sim_props
-    real(prec), dimension(:), pointer :: depth        => null()
-    real(prec), dimension(:), pointer :: density      => null()
-    real(prec), dimension(:), pointer :: temperature  => null()
-    real(prec), dimension(:), pointer :: heatcap      => null()
-    real(prec), dimension(:), pointer :: thermcond    => null()
-    real(prec), dimension(:), pointer :: liquidwater  => null()
-    real(prec), dimension(:), pointer :: age          => null()
-    real(prec), dimension(:), pointer :: grain_radius => null()
-  end type sim_props
-
-
   contains
 
   subroutine tfm_essentials_do_nothing(nz, variable)
@@ -377,4 +365,36 @@ module tfm_llStructure
       curr_node => next_node
     end do
   end subroutine llFreeList
+
+
+  subroutine llPropsFree(self)
+    implicit none
+
+    type(llProps), intent(inout) :: self
+
+    call llFreeList(self%depth)
+    call llFreeList(self%density)
+    call llFreeList(self%grain_radius)
+    call llFreeList(self%temperature)
+    call llFreeList(self%heatcap)
+    call llFreeList(self%thermcond)
+    call llFreeList(self%liquidwater)
+    call llFreeList(self%age)
+  end subroutine llPropsFree
+
+  subroutine llPropsDropData(self, n)
+    implicit none
+
+    type(llProps), intent(inout) :: self
+    integer, intent(in)          :: n
+
+    call llDropData(self%depth,        n)
+    call llDropData(self%density,      n)
+    call llDropData(self%grain_radius, n)
+    call llDropData(self%temperature,  n)
+    call llDropData(self%heatcap,      n)
+    call llDropData(self%thermcond,    n)
+    call llDropData(self%liquidwater,  n)
+    call llDropData(self%age,          n)
+  end subroutine llPropsDropData
 end module tfm_llStructure

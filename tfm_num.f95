@@ -431,10 +431,9 @@ module tfm_num
   end subroutine tfm_num_step
 
 
-  subroutine tfm_num_surface(np, dt, forcing, models, props)
+  subroutine tfm_num_surface(dt, forcing, models, props)
     implicit none
 
-    integer, intent(in)                  :: np
     real(prec), intent(in)               :: dt
     real(prec), dimension(7), intent(in) :: forcing
     type(sim_models), intent(in)         :: models
@@ -466,29 +465,6 @@ module tfm_num
 
     ! mass to be removed or added
     dm = solid_acc * dt * WATER_DENSITY
-    depth        = llGetData(props%depth)
-    density      = llGetData(props%density)
-    temperature  = llGetData(props%temperature)
-    heatcap      = llGetData(props%heatcap)
-    thermcond    = llGetData(props%thermcond)
-    grain_radius = llGetData(props%grain_radius)
-    liquidwater  = llGetData(props%liquidwater)
-    age          = llGetData(props%age)
-
-    ! theres accumulation and the maximum number of elements is reached
-    if ( nz == np .and. dm > 0.0 ) then
-
-      call llDropData(props%depth,        1)
-      call llDropData(props%density,      1)
-      call llDropData(props%temperature,  1)
-      call llDropData(props%heatcap,      1)
-      call llDropData(props%thermcond,    1)
-      call llDropData(props%grain_radius, 1)
-      call llDropData(props%liquidwater,  1)
-      call llDropData(props%age,          1)
-
-      nz = nz - 1
-    end if
 
     ! the accumulation is zero
     if ( dm == 0.0 ) then
@@ -500,18 +476,15 @@ module tfm_num
       ! height change computed from surface density
       dz = dm / surf_dens
 
-      ! with very small accumulation there can occure precison problem
-      ! causing two layers with the same depth
-      if ( ((depth(nz-1) + dz) - depth(nz-1)) == 0.0 ) then
-        RETURN
-      end if
-
-      ! add new layer
-      nz = nz + 1
+      !! with very small accumulation there can occure precison problem
+      !! causing two layers with the same depth
+      !if ( ((depth(nz-1) + dz) - depth(nz-1)) == 0.0 ) then
+      !  RETURN
+      !end if
 
       call llAppendData(             &
       &  props%depth,                &
-      &  1, (/ (depth(nz-1) + dz) /) &
+      &  1, (/ llGetLast(props%depth) + dz /) &
       )
       call llAppendData(    &
       &  props%density,     &
@@ -544,6 +517,15 @@ module tfm_num
 
     ! theres ablation
     else if ( dm < 0.0 ) then
+
+      depth        = llGetData(props%depth)
+      density      = llGetData(props%density)
+      temperature  = llGetData(props%temperature)
+      heatcap      = llGetData(props%heatcap)
+      thermcond    = llGetData(props%thermcond)
+      grain_radius = llGetData(props%grain_radius)
+      liquidwater  = llGetData(props%liquidwater)
+      age          = llGetData(props%age)
 
       ! removal of layers
       am = -dm
@@ -601,7 +583,6 @@ module tfm_num
       props%depth%tail%data(props%depth%tind - 1) = (     &
       &  props%depth%tail%data(props%depth%tind - 1) + dz &
       )
-      nz = n
     end if
   end subroutine tfm_num_surface
 
@@ -619,24 +600,6 @@ module tfm_num
   end subroutine tfm_num_lin_interp
 
 
-  subroutine tfm_num_assign(nz, props, p)
-    implicit none
-
-    integer, intent(in)                             :: nz
-    real(prec), dimension(8,nz), intent(in), target :: props
-    type(sim_props), intent(inout)                  :: p
-
-    p%depth        => props(1,:)
-    p%density      => props(2,:)
-    p%temperature  => props(3,:)
-    p%grain_radius => props(4,:)
-    p%liquidwater  => props(5,:)
-    p%age          => props(6,:)
-    p%heatcap      => props(7,:)
-    p%thermcond    => props(8,:)
-  end subroutine tfm_num_assign
-
-
   function tfm_num_age(nz, dt, age) result (n_age)
     implicit none
 
@@ -647,4 +610,44 @@ module tfm_num
 
     n_age = age + dt
   end function tfm_num_age
+
+
+  subroutine tfm_num_trimProfileLength(props, length)
+    use tfm_llStructure
+    implicit none
+
+    type(llProps), intent(inout) :: props
+    real(prec), intent(in)       :: length
+
+    integer                                   :: n
+    real(prec), dimension(props%depth%length) :: depth
+
+    depth = llGetData(props%depth)
+    do n = 1, size(depth), 2
+      if ( (depth(size(depth)) - depth(n)) <= length ) EXIT
+    end do
+    n = (n - 1)
+
+    call llPropsDropData(props, n)
+  end subroutine tfm_num_trimProfileLength
+
+
+  subroutine tfm_num_trimProfileAge(props, max_age)
+    use tfm_llStructure
+    implicit none
+
+    type(llProps), intent(inout) :: props
+    real(prec), intent(in)       :: max_age
+
+    integer                                 :: n
+    real(prec), dimension(props%age%length) :: age
+
+    age = (llGetData(props%age) / SECONDS_YEAR)
+    do n = 1, size(age), 2
+      if ( age(n) <= max_age ) EXIT
+    end do
+    n = (n - 1)
+
+    call llPropsDropData(props, n)
+  end subroutine tfm_num_trimProfileAge
 end module tfm_num
