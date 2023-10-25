@@ -14,7 +14,10 @@ program tfm_example
   character(len=100) :: solve_temperature
   character(len=100) :: solve_heat_capacity
   character(len=100) :: solve_thermal_conductivity
+  character(len=100) :: solve_liquid_thermal_conductivity
+  character(len=100) :: solve_saturation_thermal_conductivity
   character(len=100) :: solve_liquid
+  character(len=100) :: solve_van_genuchten
   character(len=100) :: solve_grain_growth
 
   character(len=100) :: forcing_input_file
@@ -39,18 +42,21 @@ program tfm_example
 
 
   ! configuration file list
-  namelist /config/              &
-  &  solve_density,              &
-  &  solve_temperature,          &
-  &  solve_heat_capacity,        &
-  &  solve_thermal_conductivity, &
-  &  solve_liquid,               &
-  &  solve_grain_growth,         &
-  &  forcing_input_file,         &
-  &  initial_input_file,         &
-  &  time_step,                  &
-  &  spinup,                     &
-  &  max_profile_length,         &
+  namelist /config/                            &
+  &  solve_density,                            &
+  &  solve_temperature,                        &
+  &  solve_heat_capacity,                      &
+  &  solve_thermal_conductivity,               &
+  &  solve_liquid_thermal_conductivity,        &
+  &  solve_saturation_thermal_conductivity,    &
+  &  solve_liquid,                             &
+  &  solve_van_genuchten,                      &
+  &  solve_grain_growth,                       &
+  &  forcing_input_file,                       &
+  &  initial_input_file,                       &
+  &  time_step,                                &
+  &  spinup,                                   &
+  &  max_profile_length,                       &
   &  max_profile_age
 
   ! read configuration
@@ -59,14 +65,17 @@ program tfm_example
   close(111)
 
   ! model initialization
-  call tfm_num_modelinit(                                         &
-  &  solve_density=trim(solve_density),                           &
-  &  solve_temperature=trim(solve_temperature),                   &
-  &  solve_heat_capacity=trim(solve_heat_capacity),               &
-  &  solve_thermal_conductivity=trim(solve_thermal_conductivity), &
-  &  solve_liquid=trim(solve_liquid),                             &
-  &  solve_grain_growth=trim(solve_grain_growth),                 &
-  &  models=models                                                &
+  call tfm_num_modelinit(                                                               &
+  &  solve_density=trim(solve_density),                                                 &
+  &  solve_temperature=trim(solve_temperature),                                         &
+  &  solve_heat_capacity=trim(solve_heat_capacity),                                     &
+  &  solve_thermal_conductivity=trim(solve_thermal_conductivity),                       &
+  &  solve_liquid_thermal_conductivity=trim(solve_liquid_thermal_conductivity),         &
+  &  solve_saturation_thermal_conductivity=trim(solve_saturation_thermal_conductivity), &
+  &  solve_liquid=trim(solve_liquid),                                                   &
+  &  solve_van_genuchten=trim(solve_van_genuchten),                                     &
+  &  solve_grain_growth=trim(solve_grain_growth),                                       &
+  &  models=models                                                                      &
   )
 
   ! sinup configuration
@@ -85,12 +94,15 @@ program tfm_example
   ! freedback
   print '(a,a)', 'Model Definitions'
   print '(a,a)', '================='
-  print '(a,a)', 'density:                   ', trim(solve_density)
-  print '(a,a)', 'temperature:               ', trim(solve_temperature)
-  print '(a,a)', 'heat capacity:             ', trim(solve_heat_capacity)
-  print '(a,a)', 'thermal conductivity:      ', trim(solve_thermal_conductivity)
-  print '(a,a)', 'liquid:                    ', trim(solve_liquid)
-  print '(a,a)', 'grain growth:              ', trim(solve_grain_growth)
+  print '(a,a)', 'density:                         ', trim(solve_density)
+  print '(a,a)', 'temperature:                     ', trim(solve_temperature)
+  print '(a,a)', 'heat capacity:                   ', trim(solve_heat_capacity)
+  print '(a,a)', 'thermal conductivity:            ', trim(solve_thermal_conductivity)
+  print '(a,a)', 'liquid thermal conductivity:     ', trim(solve_liquid_thermal_conductivity)
+  print '(a,a)', 'saturation thermal conductivity: ', trim(solve_saturation_thermal_conductivity)
+  print '(a,a)', 'liquid:                          ', trim(solve_liquid)
+  print '(a,a)', 'van Genuchten:                   ', trim(solve_van_genuchten)
+  print '(a,a)', 'grain growth:                    ', trim(solve_grain_growth)
   print '(a,a)', ''
   print '(a,a)', 'read forcing from:         ', trim(forcing_input_file)
   print '(a,a)', 'read initial profile from: ', trim(initial_input_file)
@@ -114,7 +126,7 @@ program tfm_example
     &  (sum(forcing(4,:)) / nt), & ! -> surface densiy
     &  (sum(forcing(5,:)) / nt), & ! -> surface accumulation (solid)
     &  0.0_prec,                 & ! -> surface accumulation (liquid)
-    &  (sum(forcing(6,:)) / nt)  & ! _> surface grain radius
+    &  (sum(forcing(7,:)) / nt)  & ! -> surface grain radius
     /)
 
     do t = 1, snt, 1
@@ -149,6 +161,8 @@ program tfm_example
     print '(a)', ''
   end if
 
+  call simpleOutput(0, props)
+
   ! time loop
   print '(a)', 'Simulation run:'
   do t = 1, nt, 1
@@ -177,15 +191,14 @@ program tfm_example
     &  runoff=runoff(t),       &
     &  liquid_acc=forcing(6,t) &
     )
+    
+    call simpleOutput(t, props)
   end do
 
   ! feedback
   call system_clock(toc, rate)
   print *, ''
   write(*, '(a,f10.2,a)') 'time elapsed: ', real(toc - tic) / real(rate), ' s'
-
-  ! simple output
-  call simpleOutput(props)
 
   ! memoray deallocation
   call llPropsFree(props)
@@ -266,8 +279,17 @@ subroutine tfm_read_init(input_file, props, models)
   nz = props%depth%length
   allocate(heatcap(nz), thermcond(nz))
 
-  heatcap   = models%heatcap_model(nz)
-  thermcond = models%thermcond_model(nz, llGetData(props%density))
+  heatcap   = models%heatcap_model( &
+  &  nz,                            &
+  &  llGetData(props%density),      &
+  &  llGetData(props%temperature),  &
+  &  llGetData(props%liquidwater)   &
+  )
+  thermcond = models%thermcond_model( &
+  &  nz,                              &
+  &  llGetData(props%density),        &
+  &  llGetData(props%temperature)     &
+  )
 
   call llAppendData(props%heatcap, nz, heatcap)
   call llAppendData(props%thermcond, nz, thermcond)
@@ -276,11 +298,14 @@ subroutine tfm_read_init(input_file, props, models)
 end subroutine tfm_read_init
 
 
-subroutine simpleOutput(props)
+subroutine simpleOutput(nt, props)
   use tfm_llStructure
   implicit none
 
+  integer, intent(in)       :: nt
   type(llProps), intent(in) :: props
+  character(len=6)          :: out_number
+  character(len=24)         :: out_name
 
   integer :: n
 
@@ -289,16 +314,21 @@ subroutine simpleOutput(props)
   real(prec), dimension(props%temperature%length)  :: temperature
   real(prec), dimension(props%grain_radius%length) :: grain_radius
   real(prec), dimension(props%age%length)          :: age
+  real(prec), dimension(props%liquidwater%length)  :: liquidwater
 
   depth        = llGetData(props%depth)
   density      = llGetData(props%density)
   temperature  = llGetData(props%temperature)
   grain_radius = llGetData(props%grain_radius)
   age          = llGetData(props%age)
+  liquidwater  = llGetData(props%liquidwater)
 
-  open(333, file='tfm.out', status='replace', action='write')
+  write (out_number, '(I0.6)') nt
+  out_name = 'tfm_output/tfm'//out_number//'.out'
+
+  open(333, file=out_name, status='replace', action='write')
     do n = props%depth%length, 1, -1
-      write(333,*) depth(n), density(n), temperature(n), grain_radius(n), age(n)
+      write(333,*) depth(n), density(n), temperature(n), grain_radius(n), age(n), liquidwater(n)
     end do
   close(333)
 end subroutine simpleOutput

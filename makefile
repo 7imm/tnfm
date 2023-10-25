@@ -1,9 +1,6 @@
 FC=gfortran
 FLAGS=-Wall -fbounds-check -O3 -fbackslash
 
-merra2.o: merra2.f95 tfm_essentials.o tfm_tools.o
-	$(FC) $(FLAGS) -c -I/usr/include merra2.f95
-
 tfm_tools.o: tfm_tools.f95 tfm_essentials.o 
 	$(FC) $(FLAGS) -c -I/usr/include tfm_tools.f95
 
@@ -30,9 +27,6 @@ tfm_preprocessing.o: tfm_preprocessing.f95 tfm_essentials.o tfm_constants.o
 
 tfm_constants.o: tfm_constants.f95
 	$(FC) $(FLAGS) -c tfm_constants.f95
-
-kohnen04long: kohnen04long.f95 tfm_essentials.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_density.o tfm_tools.o
-	$(FC) $(FLAGS) -o kohnen04long kohnen04long.f95 tfm_essentials.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_grain.o tfm_density.o tfm_tools.o -L/usr/lib -lnetcdff -I/usr/include
 
 tfm: tfm.f95 tfm_essentials.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_density.o tfm_tools.o
 	$(FC) $(FLAGS) -o tfm tfm.f95 tfm_essentials.o tfm_num.o tfm_constants.o tfm_liquid.o tfm_temperature.o tfm_grain.o tfm_density.o tfm_tools.o -L/usr/lib -lnetcdff -I/usr/include

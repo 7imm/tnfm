@@ -9,21 +9,26 @@ module tfm_num
   implicit none
 
 
-  ! interface for bucket scheme
+  ! interface for liquid water
   interface
-    subroutine liquid_inter(nz, dt, depth, density, temperature, &
-      &liquid_water, infiltration_rate, runoff)
+    subroutine liquid_inter(nz, dt, depth, density, temperature,  &
+      & grain_radius, water_content, liquid_accumulation, runoff, &
+      & van_genuchten_model)
       use tfm_essentials
+      use tfm_liquid
       implicit none
 
       integer, intent(in)                   :: nz
       real(prec), intent(in)                :: dt
       real(prec), dimension(nz), intent(in) :: depth
-      real(prec), intent(in)                :: infiltration_rate
+      real(prec), dimension(nz), intent(in) :: grain_radius
+      real(prec), intent(in)                :: liquid_accumulation 
+
+      procedure(van_genuchten_inter), pointer :: van_genuchten_model
 
       real(prec), dimension(nz), intent(inout) :: density
       real(prec), dimension(nz), intent(inout) :: temperature
-      real(prec), dimension(nz), intent(inout) :: liquid_water
+      real(prec), dimension(nz), intent(inout) :: water_content 
       real(prec), intent(inout)                :: runoff
     end subroutine liquid_inter
   end interface
@@ -70,38 +75,78 @@ module tfm_num
 
   ! interface for heat capacity
   interface
-    function heatcap_inter(nz)
-      use tfm_essentials
-      implicit none
-      
-      integer, intent(in)       :: nz
-      real(prec), dimension(nz) :: heatcap_inter
-    end function heatcap_inter
-  end interface
-
-
-  ! interface for thermal conductivity
-  interface
-    function thermcond_inter(nz, density)
+    function heatcap_inter(nz, density, temperature, liquid_water)
       use tfm_essentials
       implicit none
       
       integer, intent(in)                   :: nz
       real(prec), dimension(nz), intent(in) :: density
+      real(prec), dimension(nz), intent(in) :: temperature
+      real(prec), dimension(nz), intent(in) :: liquid_water
+      real(prec), dimension(nz)             :: heatcap_inter
+    end function heatcap_inter
+  end interface
+
+
+  ! interface for dry firn thermal conductivity
+  interface
+    function thermcond_inter(nz, density, temperature)
+      use tfm_essentials
+      implicit none
+      
+      integer, intent(in)                   :: nz
+      real(prec), dimension(nz), intent(in) :: density
+      real(prec), dimension(nz), intent(in) :: temperature
       real(prec), dimension(nz)             :: thermcond_inter
     end function thermcond_inter
   end interface
 
 
+  ! interface for saturated thermal conductivity
+  interface
+    function saturation_thermcond_inter(nz, density)
+      use tfm_essentials
+      implicit none
+
+      integer, intent(in)                   :: nz
+      real(prec), dimension(nz), intent(in) :: density
+      real(prec), dimension(nz)             :: saturation_thermcond_inter
+    end function saturation_thermcond_inter
+  end interface
+
+
+  ! interface for liquid thermal conductivity
+  interface
+    function liquid_thermcond_inter(nz, density, temperature, &
+      & liquid_water, thermcond_model, sat_thermcond_model)
+      use tfm_essentials
+      implicit none
+
+      integer, intent(in)                            :: nz
+      real(prec), dimension(nz), intent(in)          :: density
+      real(prec), dimension(nz), intent(in)          :: temperature
+      real(prec), dimension(nz), intent(in)          :: liquid_water
+      procedure(thermcond_inter), pointer            :: thermcond_model
+      procedure(saturation_thermcond_inter), pointer :: sat_thermcond_model
+
+      real(prec), dimension(nz) :: liquid_thermcond_inter
+    end function liquid_thermcond_inter
+  end interface
+
+
   ! interface for grain growth
   interface
-    function grain_growth_inter(nz, dt, temperature)
+    function grain_growth_inter(nz, dt, temperature, density, &
+      & liquid_water, grain_radius)
       use tfm_essentials
       implicit none
 
       integer, intent(in)                   :: nz
       real(prec), intent(in)                :: dt
       real(prec), dimension(nz), intent(in) :: temperature
+      real(prec), dimension(nz), intent(in) :: density
+      real(prec), dimension(nz), intent(in) :: liquid_water
+      real(prec), dimension(nz), intent(in) :: grain_radius
 
       real(prec), dimension(nz) :: grain_growth_inter
     end function grain_growth_inter
@@ -109,12 +154,15 @@ module tfm_num
 
 
   type sim_models
-    procedure(density_inter),      pointer, nopass :: dens_model      => null()
-    procedure(temperature_inter),  pointer, nopass :: temp_model      => null()
-    procedure(heatcap_inter),      pointer, nopass :: heatcap_model   => null()
-    procedure(thermcond_inter),    pointer, nopass :: thermcond_model => null()
-    procedure(liquid_inter),       pointer, nopass :: liquid_model    => null()
-    procedure(grain_growth_inter), pointer, nopass :: grain_model     => null()
+    procedure(density_inter),              pointer, nopass :: dens_model             => null()
+    procedure(temperature_inter),          pointer, nopass :: temp_model             => null()
+    procedure(heatcap_inter),              pointer, nopass :: heatcap_model          => null()
+    procedure(thermcond_inter),            pointer, nopass :: thermcond_model        => null()
+    procedure(liquid_thermcond_inter),     pointer, nopass :: liquid_thermcond_model => null()
+    procedure(saturation_thermcond_inter), pointer, nopass :: sat_thermcond_model    => null()
+    procedure(liquid_inter),               pointer, nopass :: liquid_model           => null()
+    procedure(grain_growth_inter),         pointer, nopass :: grain_model            => null()
+    procedure(van_genuchten_inter),        pointer, nopass :: van_genuchten_model    => null()
   end type sim_models
 
   
@@ -122,8 +170,9 @@ module tfm_num
 
 
   subroutine tfm_num_modelinit(solve_density, solve_temperature, &
-    & solve_heat_capacity, solve_thermal_conductivity, solve_liquid, &
-    & solve_grain_growth, models)
+    & solve_heat_capacity, solve_thermal_conductivity, &
+    & solve_liquid_thermal_conductivity, solve_saturation_thermal_conductivity, &
+    & solve_liquid, solve_van_genuchten, solve_grain_growth, models)
 
     implicit none
 
@@ -131,19 +180,25 @@ module tfm_num
     character(len=*), intent(in), optional :: solve_temperature
     character(len=*), intent(in), optional :: solve_heat_capacity
     character(len=*), intent(in), optional :: solve_thermal_conductivity
+    character(len=*), intent(in), optional :: solve_liquid_thermal_conductivity
+    character(len=*), intent(in), optional :: solve_saturation_thermal_conductivity
     character(len=*), intent(in), optional :: solve_liquid
+    character(len=*), intent(in), optional :: solve_van_genuchten
     character(len=*), intent(in), optional :: solve_grain_growth
 
     ! pointer definition
     type(sim_models), intent(inout) :: models
     
     ! default / fallback
-    models%dens_model      => null()
-    models%temp_model      => null()
-    models%grain_model     => null()
-    models%heatcap_model   => null()
-    models%thermcond_model => null()
-    models%liquid_model    => null()
+    models%dens_model             => null()
+    models%temp_model             => null()
+    models%grain_model            => null()
+    models%heatcap_model          => null()
+    models%thermcond_model        => null()
+    models%liquid_thermcond_model => null()
+    models%sat_thermcond_model    => null()
+    models%liquid_model           => null()
+    models%van_genuchten_model    => null()
 
     if ( present(solve_density) ) then
       if ( solve_density == 'false' ) then
@@ -174,6 +229,8 @@ module tfm_num
         models%dens_model => tfm_density_gagliardini1998
       else if ( solve_density == 'timmsfit' ) then
         models%dens_model => tfm_density_timmsfit
+      else if ( solve_density == 'sintering' ) then
+        models%dens_model => tfm_density_sintering
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -202,6 +259,42 @@ module tfm_num
         models%liquid_model => null()
       else if ( solve_liquid == 'bucket' ) then
         models%liquid_model => tfm_liquid_bucket
+      else if ( solve_liquid == 'richards_equation' ) then
+        models%liquid_model => tfm_liquid_RichardsEquation
+
+        if ( present(solve_van_genuchten) ) then
+          if ( solve_van_genuchten == 'false' ) then
+            print *, 'module: tfm_num'
+            print *, 'subroutine: tfm_num_modelinit'
+            print *, 'method "richards_equation" is defined for'
+            print *, 'solving liquid water, but no model for the'
+            print *, 'van Genuchten parameters is given!'
+            print *, 'stopping right here!'
+            STOP
+          else if ( solve_van_genuchten == 'daanen2009' ) then
+            models%van_genuchten_model => vgParametersDaanen2009
+          else if ( solve_van_genuchten == 'yamaguchi2010' ) then
+            models%van_genuchten_model => vgParametersYamaguchi2010
+          else if ( solve_van_genuchten == 'yamaguchi2012' ) then
+            models%van_genuchten_model => vgParametersYamaguchi2012
+          else
+            print *, 'module: tfm_num'
+            print *, 'subroutine: tfm_num_modelinit'
+            print *, 'can not find van Genuchten model:', solve_van_genuchten
+            print *, 'stopping right here!'
+            STOP
+          end if
+        
+        else
+          print *, 'module: tfm_num'
+          print *, 'subroutine: tfm_num_modelinit'
+          print *, 'methods "richards_equation" is defined for'
+          print *, 'solving liquid water, but no model for the'
+          print *, 'van Genuchten parameters is given!'
+          print *, 'stopping right here!'
+          STOP
+        end if
+
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -216,6 +309,8 @@ module tfm_num
         models%heatcap_model => null()
       else if ( solve_heat_capacity == 'paterson1994' ) then
         models%heatcap_model => tfm_temperature_capacity_paterson1994
+      else if ( solve_heat_capacity == 'cuffey2010' ) then
+        models%heatcap_model => tfm_temperature_capacity_Cuffey2010
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -228,14 +323,67 @@ module tfm_num
     if ( present(solve_thermal_conductivity) ) then
       if ( solve_thermal_conductivity == 'false' ) then
         models%thermcond_model => null()
-      else if ( solve_thermal_conductivity == 'sturm2007' ) then
-        models%thermcond_model => tfm_temperature_conduct_sturm2007
+      else if ( solve_thermal_conductivity == 'sturm1997' ) then
+        models%thermcond_model => tfm_temperature_conduct_sturm1997
+      else if ( solve_thermal_conductivity == 'calonne2019' ) then
+        models%thermcond_model => tfm_temperature_conduct_calonne2019
+      else if ( solve_thermal_conductivity == 'marchenko2019' ) then
+        models%thermcond_model => tfm_temperature_conduct_marchenko2019
+      else if ( solve_thermal_conductivity == 'miller1969upperbound' ) then
+        models%thermcond_model => tfm_temperature_conduct_miller1969UpperBound
+      else if ( solve_thermal_conductivity == 'miller1969lowerbound' ) then
+        models%thermcond_model => tfm_temperature_conduct_miller1969LowerBound
+      else if ( solve_thermal_conductivity == 'geometricmean' ) then
+        models%thermcond_model => tfm_temperature_conduct_geomMean
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
         print *, 'can not find thermal conductivity model: ', solve_heat_capacity
         print *, 'stopping right here!'
         STOP
+      end if
+    end if
+
+    if ( present(solve_liquid_thermal_conductivity) ) then
+      if ( solve_liquid_thermal_conductivity == 'false' ) then
+        models%liquid_thermcond_model => null()
+      else if ( solve_liquid_thermal_conductivity == 'geometricmean' ) then
+        models%liquid_thermcond_model => tfm_temperature_liquid_cond_geomMean
+      else if ( solve_liquid_thermal_conductivity == 'voigt' ) then
+        models%liquid_thermcond_model => tfm_temperature_liquid_cond_voigt
+      else
+        print *, 'module: tfm_num'
+        print *, 'subroutine: tfm_num_modelinit'
+        print *, 'can not find liquid thermal conductivity mode: ', solve_liquid_thermal_conductivity
+        print *, 'stopping right here!'
+        STOP
+      end if
+
+      if (                                                    &
+      &  present(solve_saturation_thermal_conductivity)       &
+      &  .and. (solve_liquid_thermal_conductivity /= 'false') &
+      ) then
+
+        if ( solve_saturation_thermal_conductivity == 'geometricmean' ) then
+          models%sat_thermcond_model => tfm_temperature_sat_cond_geomMean
+        else if ( solve_saturation_thermal_conductivity == 'voigt' ) then
+          models%sat_thermcond_model => tfm_temperature_sat_cond_Voigt
+        else if ( solve_saturation_thermal_conductivity == 'reuss' ) then
+          models%sat_thermcond_model => tfm_temperature_sat_cond_Reuss
+        else if ( solve_saturation_thermal_conductivity == 'miller1969upperbound' ) then
+          models%sat_thermcond_model => tfm_temperature_sat_cond_Miller1969UpperBound
+        else if ( solve_saturation_thermal_conductivity == 'miller1969lowerbound' ) then
+          models%sat_thermcond_model => tfm_temperature_sat_cond_Miller1969LowerBound
+        else
+          print *, 'module: tfm_num'
+          print *, 'subroutine: tfm_num_modelinit'
+          print *, 'There is a model defined for solving the thermal'
+          print *, 'conductivity in presence of liquid water. But '
+          print *, 'there is no model defined how to solve the thermal'
+          print *, 'conductivity at water saturation.'
+          print *, 'Stopping right here!'
+          STOP
+        end if
       end if
     end if
 
@@ -246,6 +394,12 @@ module tfm_num
         models%grain_model => tfm_grain_arthern2010
       else if ( solve_grain_growth == 'zwally2002' ) then
         models%grain_model => tfm_grain_zwally2002
+      else if ( solve_grain_growth == 'brun1989' ) then
+        models%grain_model => tfm_grain_brun1989
+      else if ( solve_grain_growth == 'tusima1978' ) then
+        models%grain_model => tfm_grain_tusima1978
+      else if ( solve_grain_growth == 'katsushima2009' ) then
+        models%grain_model => tfm_grain_katsushima2009
       else
         print *, 'module: tfm_num'
         print *, 'subroutine: tfm_num_modelinit'
@@ -306,11 +460,19 @@ module tfm_num
     age                  = llGetData(props%age)
 
     ! liquid model
-    if ( (associated(models%liquid_model)) .and. (liquid_acc > 0.0) ) then
-      call models%liquid_model(                    &
-      &  nz, dt,                                   &
-      &  depth, density, temperature, liquidwater, &
-      &  liquid_acc, runoff                        &
+    !if ( (associated(models%liquid_model)) .and. (liquid_acc > 0.0) ) then
+    if ( associated(models%liquid_model) ) then
+      call models%liquid_model(     &
+      &  nz,                        &
+      &  dt,                        &
+      &  depth,                     &
+      &  density,                   &
+      &  temperature,               &
+      &  grain_radius,              &
+      &  liquidwater,               &
+      &  liquid_acc,                &
+      &  runoff,                    &
+      &  models%van_genuchten_model &
       )
     end if
 
@@ -331,8 +493,8 @@ module tfm_num
 
     ! Picard loop
     n = 0
-    do while ( (maxval(abs(residuum)) > 1.0e-2) .and. (n < 100) )
-      
+    do while ( (maxval(abs(residuum)) > 1.0e-2_prec) .and. (n < 100) )
+
       ! density model
       if ( associated(models%dens_model) ) then
         d_density = models%dens_model( &
@@ -352,21 +514,44 @@ module tfm_num
         ! to zero, (which is not ideal).
         dens_residuum = abs(n_density - (density + d_density))
         do m = 1, nz, 1
-          if ( floor(n_density(m)) == 550              ) dens_residuum(m) = 0.0
-          if ( floor(n_density(m)) == CLOSEOFF_DENSITY ) dens_residuum(m) = 0.0
+          if ( floor(n_density(m)) == 550.0_prec       ) dens_residuum(m) = 0.0_prec
+          if ( floor(n_density(m)) == CLOSEOFF_DENSITY ) dens_residuum(m) = 0.0_prec
         end do
         residuum(1) = maxval(dens_residuum)
       end if
 
       ! heat capacity model
       if ( associated(models%heatcap_model) ) then
-        n_heat_capacity = models%heatcap_model(nz)
+        n_heat_capacity = models%heatcap_model( &
+        &  nz,                                  &
+        &  n_density,                           &
+        &  n_temperature,                       &
+        &  n_liquidwater                        &
+        )
         !residuum(2) = maxval(abs(n_heat_capacity - heatcap))
       end if
 
       ! thermal conductivity model
       if ( associated(models%thermcond_model) ) then
-        n_thermal_conductivity = models%thermcond_model(nz, n_density)
+        if (                                                 &
+        &  (any(n_liquidwater > 0.0_prec))                   &
+        &  .and. (associated(models%liquid_thermcond_model)) &
+        ) then
+          n_thermal_conductivity = models%liquid_thermcond_model( &
+          &  nz,                                                  &
+          &  n_density,                                           &
+          &  n_temperature,                                       &
+          &  n_liquidwater,                                       &
+          &  models%thermcond_model,                              &
+          &  models%sat_thermcond_model                           &
+          )
+        else
+          n_thermal_conductivity = models%thermcond_model( &
+          &  nz,                                           &
+          &  n_density,                                    &
+          &  n_temperature                                 &
+          )
+        end if
         !residuum(3) = maxval(abs(n_thermal_conductivity - thermcond))
       end if
 
@@ -389,7 +574,10 @@ module tfm_num
       if ( associated(models%grain_model) ) then
         d_grain_radius = models%grain_model( &
         &  nz, dt,                           &
-        &  temperature=n_temperature         &
+        &  temperature=n_temperature,        &
+        &  density=n_density,                &
+        &  liquid_water=n_liquidwater,       &
+        &  grain_radius=grain_radius         &
         )
         residuum(5) = maxval(abs(                           &
         &  n_grain_radius - (grain_radius + d_grain_radius) &
@@ -467,20 +655,21 @@ module tfm_num
     dm = solid_acc * dt * WATER_DENSITY
 
     ! the accumulation is zero
-    if ( dm == 0.0 ) then
+    if ( dm == 0.0_prec ) then
       RETURN
 
     ! theres accumulation and there are still elements available
-    else if ( dm > 0.0 ) then
+    else if ( dm > 0.0_prec ) then
 
       ! height change computed from surface density
       dz = dm / surf_dens
 
-      !! with very small accumulation there can occure precison problem
-      !! causing two layers with the same depth
-      !if ( ((depth(nz-1) + dz) - depth(nz-1)) == 0.0 ) then
-      !  RETURN
-      !end if
+      ! with very small accumulation there can occure precison problem
+      ! causing two layers with the same depth
+      if ( ((llGetLast(props%depth) + dz) - llGetLast(props%depth)) <= 1.0E-10_prec ) then
+      !if ( ((llGetLast(props%depth) + dz) - llGetLast(props%depth)) == 0.0_prec ) then
+        RETURN
+      end if
 
       call llAppendData(             &
       &  props%depth,                &
@@ -498,13 +687,20 @@ module tfm_num
       &  props%grain_radius,   &
       &  1, (/ surf_grain /)   &
       )
-      call llAppendData(                  &
-      &  props%heatcap,                   &
-      &  1, (/ models%heatcap_model(1) /) &
+      call llAppendData(                       &
+      &  props%heatcap,                        &
+      &  1, (/ models%heatcap_model(           &
+      &    1,                                  &
+      &    (/ llGetLast(props%density) /),     &
+      &    (/ llGetLast(props%temperature) /), &
+      &     (/ llGetLast(props%liquidwater) /) &
+      &  ) /)                                  &
       )
-      call llAppendData(                                                    &
-      &  props%thermcond,                                                   &
-      &  1, (/ models%thermcond_model(1, (/ llGetLast(props%density) /)) /) &
+      call llAppendData(                                                          &
+      &  props%thermcond,                                                         &
+      &  1, (/ models%thermcond_model(                                            &
+      &     1, (/ llGetLast(props%density) /), (/ llGetLast(props%temperature) /) &
+      &   ) /)                                                                    &
       )
       call llAppendData(      &
       &  props%liquidwater,   &
@@ -516,8 +712,8 @@ module tfm_num
       )
 
     ! theres ablation
-    else if ( dm < 0.0 ) then
-
+    else if ( dm < 0.0_prec ) then
+      
       depth        = llGetData(props%depth)
       density      = llGetData(props%density)
       temperature  = llGetData(props%temperature)
@@ -531,7 +727,7 @@ module tfm_num
       am = -dm
       do n = nz - 1, 1, -1
         am = am - ((depth(n+1) - depth(n)) * density(n))
-        if ( am <= 0.0 ) EXIT
+        if ( am <= 0.0_prec ) EXIT
         dm = dm + ((depth(n+1) - depth(n)) * density(n))
       end do
       dz = dm / density(n)
@@ -569,20 +765,32 @@ module tfm_num
       &  dz, age(n)                          &
       )
 
+      ! new value
+      call llUpdateList(props%depth,        depth)
+      call llUpdateList(props%density,      density)
+      call llUpdateList(props%temperature,  temperature)
+      call llUpdateList(props%grain_radius, grain_radius)
+      call llUpdateList(props%heatcap,      heatcap)
+      call llUpdateList(props%thermcond,    thermcond)
+      call llUpdateList(props%age,          age)
+      call llUpdateList(props%liquidwater,  liquidwater)
+ 
       ! fill removed layers with NaN value
-      call llDropData(props%depth,        (nz - n))
-      call llDropData(props%density,      (nz - n))
-      call llDropData(props%temperature,  (nz - n))
-      call llDropData(props%heatcap,      (nz - n))
-      call llDropData(props%thermcond,    (nz - n))
-      call llDropData(props%grain_radius, (nz - n))
-      call llDropData(props%liquidwater,  (nz - n))
-      call llDropData(props%age,          (nz - n))
+      call llDropData(props%depth,        -(nz - n))
+      call llDropData(props%density,      -(nz - n))
+      call llDropData(props%temperature,  -(nz - n))
+      call llDropData(props%heatcap,      -(nz - n))
+      call llDropData(props%thermcond,    -(nz - n))
+      call llDropData(props%grain_radius, -(nz - n))
+      call llDropData(props%liquidwater,  -(nz - n))
+      call llDropData(props%age,          -(nz - n))
 
       ! new depth / height of the uppermost layer
-      props%depth%tail%data(props%depth%tind - 1) = (     &
-      &  props%depth%tail%data(props%depth%tind - 1) + dz &
-      )
+      !props%depth%tail%data(props%depth%tind - 1) = (     &
+      !&  props%depth%tail%data(props%depth%tind - 1) + dz &
+      !)
+      depth(n) = (depth(n) + dz)
+      call llUpdateList(props%depth, depth)
     end if
   end subroutine tfm_num_surface
 

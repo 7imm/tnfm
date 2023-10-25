@@ -341,10 +341,20 @@ module tfm_llStructure
   function llGetLast(self) result(last)
     implicit none
 
-    type(linkedList), intent(in) :: self
-    real(prec)                   :: last
+    type(linkedList), intent(in)       :: self
+    real(prec)                         :: last
+    real(prec), dimension(self%length) :: all_data
 
-    last = self%tail%data((self%tind - 1))
+    if ( (self%tind - 1) /= 0 ) then
+      last = self%tail%data((self%tind - 1))
+
+    ! if the last index is the first of the tail
+    ! get the last entrace of all data
+    else
+      all_data = llGetData(self)
+      last = all_data(self%length)
+
+    end if
   end function llGetLast
 
 

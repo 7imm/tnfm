@@ -312,163 +312,43 @@ end module tfm_density_stress
 
 
 module tfm_density_processes
-  use tfm_essentials 
+  use tfm_essentials
   use tfm_constants
   use tfm_density_tools
-  use tfm_density_stress
   implicit none
 
-  ! parameters
-  real(prec), parameter :: DELTA_B      = 9.0e-10_prec
-  real(prec), parameter :: OMEGA        = 3.27e-29_prec
-  real(prec), parameter :: AIR_PRESSURE = 101325.0_prec
-  real(prec), parameter :: H            = 4.0e-6_prec
-  real(prec), parameter :: MU           = 0.7_prec
 ! ---------------------------------------------------------------------
 ! Module: tfm_density_processes
 !
 ! The module contains functions for process based firn densification
-! modelling. It is mainly based on:
+! modelling.
 !
-! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
-! Densification and their Effect on the Geodetic Determination of Ice
-! Sheet Mass Balance. Climate Change, 40, 605-&24, (1998). https://
-! doi.org/10.1023/A:1005320713306
-!
-! Dependencies: tfm_essentials, tfm_constants, tfm_density_tools,
-!               tfm_density_stress
-!
-! Parameters (see Arthern & Wingham, 1998):
-!   DELTA_B: Width of the grain boundary (m).
-!   OMEGA: Volume of the H2O molecule (m**3).
-!   AIR_PRESSURE: Normal air pressure (Pa).
-!   H: Amplitude of grain boundary obstructions (m).
-!   MU: Ratio of neck radius to grain radius (1).
+! Dependencies: tfm_essentials, tfm_constants, tfm_density_tools
 !
 ! Functions:
-!  tfm_density_grainBoundarySliding: strain rate from grain boundary
-!                                    sliding
-!  tfm_density_dislocationCreep: strain rate from dislocation creep
-!  tfm_density_boundaryDiffusion: strain rate from boundary diffusion
-!  tfm_density_latticeDiffusion: strain rate from lattice diffusion
+!   tfm_density_NabarroHerringCreep
+!   tfm_density_NabarroHerringCreepMod
+!   tfm_density_CobleCreep
+!   tfm_density_DislocationCreep
+!   tfm_density_DislocationCreepMod
+!   tfm_density_GrainBoundarySliding
 ! ---------------------------------------------------------------------
 
   contains
 
-
-  function tfm_density_grainBoundarySliding(density, temperature, &
-    & grain_radius, stress) result(strain_rate)
+  function tfm_density_NabarroHerringCreep(temperature, density, grain_radius, &
+    & driving_force) result(strain_rate)
     implicit none
 
-    real(prec), intent(in) :: density
     real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: density
     real(prec), intent(in) :: grain_radius
-    real(prec), intent(in) :: stress
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
 
-    real(prec) :: strain_rate
-    real(prec) :: arrhenius
-
-    ! paramters
-    real(prec) :: ABDC    = 3.0e-2_prec
-    real(prec) :: QBDC    = 44100.0_prec
+    real(prec) :: rate_factor_lattice_diffusion
 ! ---------------------------------------------------------------------
-! Function: tfm_density_grainBoundarySliding
-!
-! The function computes the strain rate in firn resulting from grain
-! boundary sliding as described by:
-!
-! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
-! Densification and their Effect on the Geodetic Determination of Ice
-! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
-! doi.org/10.1023/A:1005320713306
-!
-! This description is based on the work of:
-!
-! Alley, R. B. Firn Densification by Grain Boundary Sliding: A First
-! Model. J. Phys. Colloques, 48, C1, C1-249-C1-256, (1987), https://
-! doi.org/10.1051/jphyscol:1987135
-!
-! Author: Timm Schultz
-!
-! Parameters:
-!   ABDC: Pre factor for the arrhenius equation describing boundary 
-!         diffusion (m**2 s**-1).
-!   QBDC: Activation energy for the arrhenius equation describing
-!         boundary diffusion sliding (J mol**-1).
-!
-! For parameters see Arthern & Wingham (1998).
-!
-! Arguments:
-!   density: Absolute density (kg m**-3).
-!   temperature: Temperature (K).
-!   grain_radius: Grain radius (m).
-!   stress: Stress due to overburden firn (Pa).
-!
-! Result:
-!   strain_rate: Strain rate resulting from grain boundary
-!                sliding (s**-1).
-! ---------------------------------------------------------------------
-
-    strain_rate = 0.0_prec
-
-    if ( ( density > 0.0 ) .and. ( density <= 550.0) ) then
-
-      arrhenius = tfm_density_arrhenius(1, ABDC, QBDC, temperature)
-
-      strain_rate = strain_rate + (                                                &
-      &  (-2.0_prec / 15.0_prec)                                                   &
-      &  * (DELTA_B)                                                               &
-      &  * ((8.0_prec * arrhenius * OMEGA) / (BOLTZMANN * temperature * (H**2.0))) &
-      &  * (1.0_prec / (grain_radius * (MU**2.0)))                                 &
-      &  * ((ICE_DENSITY / density)**3.0)                                          &
-      &  * (1.0_prec - ((5.0_prec * density) / (3.0_prec * ICE_DENSITY)))          &
-      &  * stress                                                                  &
-      )
-    
-    else
-
-      print *, 'module: tfm_density_processes'
-      print *, 'function: tfm_density_grainBoundarySliding'
-      print *, ''
-      print *, 'The processes of grain boundary sliding is not defined '
-      print *, 'for the given density:'
-      print *, 'density = ', density
-      print *, ''
-      print *, 'Stopping right here!'
-      STOP
-
-    end if
-  end function tfm_density_grainBoundarySliding
-
-
-  function tfm_density_dislocationCreep(density, temperature, stress) &
-    & result(strain_rate)
-    implicit none
-
-    real(prec), intent(in)    :: density
-    real(prec), intent(in)    :: temperature
-    real(prec), intent(in)    :: stress
-
-    real(prec) :: strain_rate
-    real(prec) :: rel_density
-    real(prec) :: arrhenius
-    real(prec) :: corrected_stress
-
-    ! parameters
-    real(prec) :: ADC = 3.22e-11_prec
-    real(prec) :: QDC = 74500.0_prec
-! ---------------------------------------------------------------------
-! Function: tfm_density_dislocationCreep
-!
-! The function computes the strain rate in firn resulting from
-! dislocation creep as described by:
-!
-! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
-! Densification and their Effect on the Geodetic Determination of Ice
-! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
-! doi.org/10.1023/A:1005320713306
-!
-! This description is based on the work of:
+! Function: tfm_density_NabarroHerringCreep
 !
 ! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
 ! Implication to the Densification of Snow at Polar Glaciers and Ice
@@ -476,254 +356,322 @@ module tfm_density_processes
 !
 ! Author: Timm Schultz
 !
-! Parameters:
-!   ADC: Pre factor for the arrhenius equation describing dislocation
-!        creep ((N m**-2)**-n).
-!   QDC: Activation energy for the arrhenius equation describing
-!        dislocation creep(J mol**-1).
-!
-! For parameters see Arthern & Wingham (1998).
-!
 ! Arguments:
-!   density: Absolute density (kg m**-3).
-!   temperature: Temperature (K).
-!   stress: Stress due to overburden firn (Pa).
-!
-! Result:
-!   strain_rate: Strain rate resulting from dislocation creep (s**-1).
-! ---------------------------------------------------------------------
-
-    arrhenius = tfm_density_arrhenius(1, ADC, QDC, temperature)
-    rel_density = (density / ICE_DENSITY)
-
-    if ( ( density > 550.0 ) .and. ( density <= 834.0 ) ) then
-      
-      strain_rate = (                                                           &
-      &  (                                                                      &
-      &    (-2.0_prec * arrhenius)                                              &
-      &    * (1.0_prec - rel_density)                                           &
-      &    * (((2.0_prec / ICE_N) * stress)**ICE_N)                             &
-      &  )                                                                      &
-      &  / ((1.0_prec - ((1.0_prec - rel_density)**(1.0_prec / ICE_N)))**ICE_N) &
-      )
-
-    else if ( ( density > 834.0 ) .and. ( density < ICE_DENSITY ) ) then
-      
-      corrected_stress = (                                            &
-      &  stress - (AIR_PRESSURE * tfm_density_boyleMariotte(density)) &
-      )
-      
-      strain_rate = (                                                             &
-      &  ((-3.0_prec / 2.0_prec) * arrhenius)                                     &
-      &  * (                                                                      &
-      &    (1.0_prec - rel_density)                                               &
-      &    / ((1.0_prec - ((1.0_prec - rel_density)**(1.0_prec / ICE_N)))**ICE_N) &
-      &  )                                                                        &
-      &  * (((3.0_prec / (2.0_prec * ICE_N)) * corrected_stress)**ICE_N)          &
-      )
-
-    else
-
-      print *, 'module: tfm_density_processes'
-      print *, 'function: tfm_density_dislocationCreep'
-      print *, ''
-      print *, 'The processes of dislocation creep is not defined for '
-      print *, 'the given density:'
-      print *, 'density = ', density
-      print *, ''
-      print *, 'Stopping right here!'
-      STOP
-
-    end if
-  end function tfm_density_dislocationCreep
-
-
-  function tfm_density_boundaryDiffusion(density, temperature, grain_radius, &
-    & stress) result(strain_rate)
-    implicit none
-
-    real(prec), intent(in) :: density
-    real(prec), intent(in) :: temperature
-    real(prec), intent(in) :: grain_radius
-    real(prec), intent(in) :: stress
-
-    real(prec) :: strain_rate
-    real(prec) :: arrhenius
-    real(prec) :: corrected_stress
-
-    ! parameters
-    real(prec) :: ABDC = 3.0e-2_prec
-    real(prec) :: QBDC = 44100.0_prec
-! ---------------------------------------------------------------------
-! Function: tfm_density_boundaryDiffusion
-!
-! The function computes the strain rate in firn resulting from
-! boundary diffusion as described by:
-!
-! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
-! Densification and their Effect on the Geodetic Determination of Ice
-! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
-! doi.org/10.1023/A:1005320713306
-!
-! This description is based on the work of:
-!
-! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
-! Implication to the Densification of Snow at Polar Glaciers and Ice
-! Sheets. J. Phys. Chem, 87, 4103-4110, (1983). 
-!
-! Author: Timm Schultz
-!
-! Parameters:
-!   ABDC: Pre factor for the arrhenius equation describing boundary
-!         diffusion (m**2 s**-1).
-!   QBDC: Activation energy for the arrhenius equation describing
-!         boundary diffusion (J mol**-1).
-!
-! For parameters see Arthern & Wingham (1998).
-!
-! Arguments:
-!   density: Absolute density (kg m**-3).
-!   temperature: Temperature (K).
+!   temperature: Temperaure (K).
 !   grain_radius: Grain radius (m).
-!   stress: Stress due to overburden firn (Pa).
+!   driving force: Sintering driving force (Pa).
 !
 ! Result:
-!   strain_rate: Strain rate resulting from boundary diffusion (s**-1).
+!   strain_rate: Resulting strain rate (s**-1).
 ! ---------------------------------------------------------------------
 
-    arrhenius = tfm_density_arrhenius(1, ABDC, QBDC, temperature)
-
-
-    if ( ( density > 550.0 ) .and. ( density <= 834.0 ) ) then
-      
-      corrected_stress = stress
-      
-    else if ( ( density > 834.0 ) .and. ( density <= ICE_DENSITY ) ) then
-      
-      corrected_stress = (                                            &
-      &  stress - (AIR_PRESSURE * tfm_density_boyleMariotte(density)) &
-      )
-      
-    else
-
-      print *, 'module: tfm_density_processes'
-      print *, 'function: tfm_density_boundaryDiffusion'
-      print *, ''
-      print *, 'The processes of boundary diffusion is not defined for '
-      print *, 'the given density:'
-      print *, 'density = ', density
-      print *, ''
-      print *, 'Stopping right here!'
-      STOP
-
-    end if
-
-    strain_rate = (                                             &
-    &  (-37.0_prec / 2.0_prec)                                  &
-    &  * (                                                      &
-    &    (DELTA_B * arrhenius * OMEGA)                          &
-    &    / (BOLTZMANN * temperature * (grain_radius**3.0_prec)) &
-    &  )                                                        &
-    &  * (ICE_DENSITY / density)                                &
-    &  * corrected_stress                                       &
+    rate_factor_lattice_diffusion = tfm_density_arrhenius( &
+    &  1,                                                  &
+    &  PRE_FACTOR_LATTICE_DIFFUSION,                       &
+    &  ACTIVATION_ENERGY_LATTICE_DIFFUSION,                &
+    &  temperature                                         &
     )
-  end function tfm_density_boundaryDiffusion
+    
+    !strain_rate = (                                                       &
+    !&  -((10.0_prec * VOLUME_H2O) / (3.0_prec * BOLTZMANN * temperature)) &
+    !&  * (1.0_prec / (grain_radius**2.0_prec))                            &
+    !&  * rate_factor_lattice_diffusion                                    &
+    !&  * driving_force                                                    &
+    !)
+
+    strain_rate = (                                                       &
+    &  -((10.0_prec * VOLUME_H2O) / (2.0_prec * BOLTZMANN * temperature)) &
+    &  * (1.0_prec / (grain_radius**3.0_prec))                            &
+    &  * rate_factor_lattice_diffusion                                    &
+    &  * (ICE_DENSITY / density) &
+    &  * driving_force                                                    &
+    )
+  end function tfm_density_NabarroHerringCreep
 
 
-  function tfm_density_latticeDiffusion(density, temperature, grain_radius, &
-    & stress) result(strain_rate)
+  function tfm_density_NabarroHerringCreepMod(temperature, density, &
+    & grain_radius, pore_radius, driving_force) result(strain_rate)
     implicit none
 
-    real(prec), intent(in) :: density
     real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: density
     real(prec), intent(in) :: grain_radius
-    real(prec), intent(in) :: stress
-    
-    real(prec) :: strain_rate
-    real(prec) :: arrhenius
-    real(prec) :: corrected_stress
+    real(prec), intent(in) :: pore_radius
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
 
-    ! parameters
-    real(prec), parameter :: ALD = 3.0e-2_prec
-    real(prec), parameter :: QLD = 66200.0_prec
+    real(prec) :: rate_factor_lattice_diffusion
 ! ---------------------------------------------------------------------
-! Function: tfm_density_latticeDiffusion
-!
-! The function computes the strain rate in firn resulting from
-! lattice diffusion as described by:
-!
-! Arthern, R. J. and Wingham, D. J. The Natural Fluctuations of Firn
-! Densification and their Effect on the Geodetic Determination of Ice
-! Sheet Mass Balance. Climate Change, 40, 605-524, (1998). https://
-! doi.org/10.1023/A:1005320713306
-!
-! This description is based on the work of:
+! Function: tfm_density_NabarroHerringCreepMod
 !
 ! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
 ! Implication to the Densification of Snow at Polar Glaciers and Ice
-! Sheets. J. Phys. Chem, 87, 4103-4110, (1983). 
+! Sheets. J. Phys. Chem., 87, 4103-4110, (1983). 
 !
 ! Author: Timm Schultz
 !
-! Parameters:
-!   ALD: Pre factor for the arrhenius equation describing lattice
-!        diffusion (m**2 s**-1).
-!   QLD: Activation energy for the arrhenius equation describing
-!        lattice diffusion (J mol**-1).
-!
-! For parameters see Arthern & Wingham (1998).
-!
 ! Arguments:
-!   density: Absolute density (kg m**-3).
 !   temperature: Temperature (K).
+!   density: Density (kg m**-3).
 !   grain_radius: Grain radius (m).
-!   stress: Stress due to overburden firn (Pa).
+!   pore_radius: Pore radius (m).
+!   driving_force: Sintering dirving force (Pa).
 !
 ! Result:
-!   strain_rate: Strain rate resulting from lattice diffusion (s**-1).
+!   strain_rate: Resulting strain rate (s**-1).
 ! ---------------------------------------------------------------------
+    
+    rate_factor_lattice_diffusion = tfm_density_arrhenius( &
+    &  1,                                                  &
+    &  PRE_FACTOR_LATTICE_DIFFUSION,                       &
+    &  ACTIVATION_ENERGY_LATTICE_DIFFUSION,                &
+    &  temperature                                         &
+    )
 
-    arrhenius = tfm_density_arrhenius(1, ALD, QLD, temperature)
+    strain_rate = (                                                  &
+    &  -((3.0_prec * VOLUME_H2O) / (BOLTZMANN * temperature))        &
+    &  * (1.0_prec / (grain_radius**2.0_prec))                       &
+    &  * (density / ICE_DENSITY)                                     &
+    &  * ((1.0_prec / grain_radius) * (                              &
+    &    (pore_radius * grain_radius) / (grain_radius - pore_radius) &
+    &  ))                                                            &
+    &  * rate_factor_lattice_diffusion                               &
+    &  * driving_force                                               &
+    )
+  end function tfm_density_NabarroHerringCreepMod
 
-    if ( ( density > 550.0 ) .and. ( density <= 834.0 ) ) then
-      
-      strain_rate = (                                         &
-      &  (-10.0_prec / 3.0_prec)                              &
-      &  * (                                                  &
-      &    (arrhenius * OMEGA)                                &
-      &     / (BOLTZMANN * temperature * (grain_radius**2.0)) &
-      &  )                                                    &
-      &  * (ICE_DENSITY / density)                            &
-      &  * stress                                             &
+
+  function tfm_density_CobleCreep(temperature, grain_radius, &
+    & driving_force) result(strain_rate)
+    implicit none
+    
+    real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: grain_radius
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
+
+    real(prec) :: rate_factor_boundary_diffusion
+! ---------------------------------------------------------------------
+! Function: tfm_density_CobleCreep
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem., 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   temperature: Temeprature (K).
+!   grain_radius: Grain raidus (m).
+!   driving_force: Sintering driving force (Pa).
+!
+! Result:
+!   strain_rate: Resulting strain rate (s**-1).
+! ---------------------------------------------------------------------
+    
+    rate_factor_boundary_diffusion = tfm_density_arrhenius( &
+    &  1,                                                   &
+    &  PRE_FACTOR_BOUNDARY_DIFFUSION,                       &
+    &  ACTIVATION_ENERGY_BOUNDARY_DIFFUSION,                &
+    &  temperature                                          &
+    )
+
+    strain_rate = (                                           &
+    &  -(                                                     &
+    &    (37.0_prec * VOLUME_H2O * 2.0_prec * BURGERS_VECTOR) &
+    &    / (2.0_prec * BOLTZMANN * temperature)               &
+    &  )                                                      &
+    &  * (1.0_prec / (grain_radius**3.0_prec))                &
+    &  * rate_factor_boundary_diffusion                       &
+    &  * driving_force                                        &
+    )
+  end function tfm_density_CobleCreep
+
+
+  function tfm_density_DislocationCreep(temperature, density, &
+    & driving_force) result(strain_rate)
+    implicit none
+
+    real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: density
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
+
+    real(prec) :: rate_factor_dislocation_creep
+! ---------------------------------------------------------------------
+! Function: tfm_density_DislocationCreep
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem., 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   temperature: Temeprature (K).
+!   density: Density (kg m**-3).
+!   driving_force: Sintering driving force (Pa).
+!
+! Result:
+!   strain_rate: Resulting strain rate (s**-1).
+! ---------------------------------------------------------------------
+    
+    if (temperature > 263.15_prec) then
+      rate_factor_dislocation_creep = tfm_density_arrhenius( &
+      &  1,                                                  &
+      &  PRE_FACTOR_DISLOCATION_CREEP_HIGH,                  &
+      &  ACTIVATION_ENERGY_DISLOCATION_CREEP_HIGH,           &
+      &  temperature                                         &
       )
 
-    else if ( ( density > 834.0 ) .and. ( density <= ICE_DENSITY ) ) then
-      
-      corrected_stress = (                                            &
-      &  stress - (AIR_PRESSURE * tfm_density_boyleMariotte(density)) &
-      )
-      
-      strain_rate = (                                                                                &
-      &  (-ICE_DENSITY / density)                                                                    &
-      &  * ((3.0_prec * arrhenius * OMEGA) / (BOLTZMANN * temperature * grain_radius**2.0))          &
-      &  * (grain_radius / (((ICE_DENSITY / (ICE_DENSITY - density))**(3.0_prec**-1.0)) - 1.0_prec)) &
-      &  * ((ICE_DENSITY / density) * corrected_stress)                                              &
+    else if (temperature <= 263.15) then
+      rate_factor_dislocation_creep = tfm_density_arrhenius( &
+      &  1,                                                  &
+      &  PRE_FACTOR_DISLOCATION_CREEP_LOW,                   &
+      &  ACTIVATION_ENERGY_DISLOCATION_CREEP_LOW,            &
+      &  temperature                                         &
       )
 
     else
-
-      print *, 'module: tfm_density_processes'
-      print *, 'function: tfm_density_latticeDiffusion'
-      print *, ''
-      print *, 'The processes of lattice diffusion is not defined for '
-      print *, 'the given density:'
-      print *, 'density = ', density
-      print *, ''
-      print *, 'Stopping right here!'
-      STOP
-    
+       print *, 'Module: tfm_density_processes'
+       print *, 'Function: tfm_density_DislocationCreep'
+       print *, ''
+       print *, 'The temperature seems to show and irregular value.'
+       print *, 'Stopping right here!'
+       STOP
     end if
-  end function tfm_density_latticeDiffusion
+
+    strain_rate = (                                                                         &
+    &  (-2.0_prec * rate_factor_dislocation_creep)                                          &
+    &  * (                                                                                  &
+    &    (1.0_prec - (density / ICE_DENSITY))                                               &
+    &    / ((1.0_prec - ((1.0_prec - (density / ICE_DENSITY))**(1.0_prec / ICE_N)))**ICE_N) &
+    &  )                                                                                    &
+    &  * (((2.0_prec / ICE_N) * driving_force)**ICE_N)                                      &
+    )
+  end function tfm_density_DislocationCreep
+
+
+  function tfm_density_DislocationCreepMod(temperature, density, &
+    & driving_force) result(strain_rate)
+    implicit none
+
+    real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: density
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
+
+    real(prec) :: rate_factor_dislocation_creep
+! ---------------------------------------------------------------------
+! Function: tfm_density_DislocationCreep
+!
+! Maeno, N. and Ebinuma, T. Pressure Sintering of Ice and Its
+! Implication to the Densification of Snow at Polar Glaciers and Ice
+! Sheets. J. Phys. Chem., 87, 4103-4110, (1983). 
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   temperature: Temeprature (K).
+!   density: Density (kg m**-3).
+!   driving_force: Sintering driving force (Pa).
+!
+! Result:
+!   strain_rate: Resulting strain rate (s**-1).
+! ---------------------------------------------------------------------
+    
+    if (temperature > 263.15_prec) then
+      rate_factor_dislocation_creep = tfm_density_arrhenius( &
+      &  1,                                                  &
+      &  PRE_FACTOR_DISLOCATION_CREEP_HIGH,                  &
+      &  ACTIVATION_ENERGY_DISLOCATION_CREEP_HIGH,           &
+      &  temperature                                         &
+      )
+
+    else if (temperature <= 263.15) then
+      rate_factor_dislocation_creep = tfm_density_arrhenius( &
+      &  1,                                                  &
+      &  PRE_FACTOR_DISLOCATION_CREEP_LOW,                   &
+      &  ACTIVATION_ENERGY_DISLOCATION_CREEP_LOW,            &
+      &  temperature                                         &
+      )
+
+    else
+       print *, 'Module: tfm_density_processes'
+       print *, 'Function: tfm_density_DislocationCreepMod'
+       print *, ''
+       print *, 'The temperature seems to show and irregular value.'
+       print *, 'Stopping right here!'
+       STOP
+    end if
+
+    strain_rate = (                                                                         &
+    &  (-3.0_prec / 2.0_prec)                                                               &
+    &  * rate_factor_dislocation_creep                                                      &
+    &  * (                                                                                  &
+    &    (1.0_prec - (density / ICE_DENSITY))                                               &
+    &    / ((1.0_prec - ((1.0_prec - (density / ICE_DENSITY))**(1.0_prec / ICE_N)))**ICE_N) &
+    &  )                                                                                    &
+    &  * (((3.0_prec / (2.0_prec * ICE_N)) * driving_force)**ICE_N)                         &
+    )
+  end function tfm_density_DislocationCreepMod
+
+
+  function tfm_density_GrainBoundarySliding(temperature, density, &
+    & grain_radius, neck_radius, amplitude_gbo, driving_force)    &
+    & result(strain_rate)
+    implicit none
+    
+    real(prec), intent(in) :: temperature
+    real(prec), intent(in) :: density
+    real(prec), intent(in) :: grain_radius
+    real(prec), intent(in) :: neck_radius
+    real(prec), intent(in) :: amplitude_gbo
+    real(prec), intent(in) :: driving_force
+    real(prec)             :: strain_rate
+
+    real(prec) :: rate_factor_boundary_diffusion
+! ---------------------------------------------------------------------
+! Function: tfm_density_GrainBoundarySliding
+!
+! Alley, R. B. Firn Densification by Grain Boundary Sliding: A First
+! Model. J. Phys. Colloques, 48, C1, C1-249-C1-256, (1987), https://
+! doi.org/10.1051/jphyscol:1987135
+!
+! Author: Timm Schultz
+!
+! Arguments:
+!   temperature: Temperature (K).
+!   density: Density (kg m**-3).
+!   grain_radius: Grain radius (m).
+!   neck_radius: Radius of necks between grains (m).
+!   amplitude_gbo: Amplitude of grain boundary obstructions (m).
+!   driving_force: Sintering driving force (Pa).
+!
+! Reuslt:
+!   strain_rate: Resulting strain rate (s**-1).
+! ---------------------------------------------------------------------
+    
+    rate_factor_boundary_diffusion = tfm_density_arrhenius( &
+    &  1,                                                   &
+    &  PRE_FACTOR_BOUNDARY_DIFFUSION,                       &
+    &  ACTIVATION_ENERGY_BOUNDARY_DIFFUSION,                &
+    &  temperature                                          &
+    )
+
+    strain_rate = (                                                     &
+    &  (-2.0_prec / 15.0_prec)                                          &
+    &  * (2.0_prec * BURGERS_VECTOR)                                    &
+    &  * (                                                              &
+    &    (8.0_prec * rate_factor_boundary_diffusion * VOLUME_H2O)       &
+    &    / (BOLTZMANN * temperature * (amplitude_gbo**2.0_prec))        &
+    &  )                                                                &
+    &  * (grain_radius / (neck_radius**2.0_prec))                       &
+    &  * ((ICE_DENSITY / density)**3.0_prec)                            &
+    &  * (1.0_prec - ((5.0_prec * density) / (3.0_prec * ICE_DENSITY))) &
+    &  * driving_force                                                  &
+    )
+  end function tfm_density_GrainBoundarySliding
 end module tfm_density_processes
 
 
@@ -1262,16 +1210,17 @@ module tfm_density_gagliardini
 ! Result:
 !   rate_factor: Rate factor.
 ! ---------------------------------------------------------------------
-
+    
     do n = 1, nz, 1
       if ( temperature(n) <= TEMP_DIV ) then
-        
+      
         rate_factor(n) = tfm_density_arrhenius( &
         &  1,                                   &
         &  PRE_FACTOR_LOW,                      &
         &  ACTIVATION_ENERGY_LOW,               &
         &  temperature(n)                       &
         &)
+
       else if ( temperature(n) > TEMP_DIV ) then
 
         rate_factor(n) = tfm_density_arrhenius( &
@@ -1291,7 +1240,6 @@ module tfm_density_gagliardini
         print *, ''
         print *, 'Stopping right here!'
         STOP
-
       end if
     end do
 
@@ -1407,8 +1355,8 @@ module tfm_density_gagliardini
 
     ! avoid the singularity at ice density
     do n = 1, nz, 1
-      if ( (density(n) + d_density(n)) > (ICE_DENSITY - 10.0e-5) ) then
-        d_density(n) = (ICE_DENSITY - density(n)) - 10.0e-5
+      if ( (density(n) + d_density(n)) > (ICE_DENSITY - 10.0e-5_prec) ) then
+        d_density(n) = (ICE_DENSITY - density(n)) - 10.0e-5_prec
       end if
     end do
   end function tfm_density_gagliardiniSolve
@@ -1734,7 +1682,6 @@ module tfm_density
         print *, ''
         print *, 'Stopping right here!'
         STOP
-
       end if
     end do
 
@@ -1994,7 +1941,6 @@ module tfm_density
         print *, ''
         print *, 'Stopping right here!'
         STOP
-
       end if
     end do
 
@@ -2406,6 +2352,113 @@ module tfm_density
   end function tfm_density_herron1980
 
 
+  function tfm_density_sintering(nz, dt, depth, density, temperature, &
+    & age, grain_radius) result(d_density)
+    implicit none
+
+    integer, intent(in)                   :: nz
+    real(prec), intent(in)                :: dt
+    real(prec), dimension(nz), intent(in) :: depth
+    real(prec), dimension(nz), intent(in) :: density
+    real(prec), dimension(nz), intent(in) :: temperature
+    real(prec), dimension(nz), intent(in) :: age
+    real(prec), dimension(nz), intent(in) :: grain_radius
+    real(prec), dimension(nz)             :: d_density
+
+    integer                   :: n
+    real(prec)                :: neck_radius
+    real(prec)                :: pore_radius
+    real(prec), dimension(nz) :: stress
+    real(prec), dimension(nz) :: strain_rate
+
+    real(prec), parameter :: AMPLITUDE_GBO = 4.25E-6_prec ! m
+    real(prec), parameter :: MU = 0.7_prec
+
+
+    call tfm_essentials_do_nothing(nz, age)
+
+    ! computation of the current stress state
+    call tfm_density_computeStress(nz, depth, density, stress)
+
+    strain_rate(:) = 0.0_prec
+    do n = 1, nz, 1
+
+      strain_rate(n) = strain_rate(n) + tfm_density_CobleCreep( &
+      &  temperature(n),                                        &
+      &  grain_radius(n),                                       &
+      &  stress(n)                                              &
+      )
+     
+      if ( density(n) <= CRITICAL_DENSITY ) then
+
+        neck_radius = (MU * grain_radius(n))
+
+        strain_rate(n) = strain_rate(n) + tfm_density_GrainBoundarySliding( &
+        &  temperature(n),                                                  &
+        &  density(n),                                                      &
+        &  grain_radius(n),                                                 &
+        &  neck_radius,                                                     &
+        &  AMPLITUDE_GBO,                                                   &
+        &  stress(n)                                                        &
+        )
+      end if
+
+
+      if ( density(n) <= CLOSEOFF_DENSITY ) then
+
+        strain_rate(n) = strain_rate(n) + tfm_density_NabarroHerringCreep( &
+        &  temperature(n),                                                 &
+        &  density(n),                                                     &
+        &  grain_radius(n),                                                &
+        &  stress(n)                                                       &
+        )
+
+        strain_rate(n) = strain_rate(n) + tfm_density_DislocationCreep( &
+        &  temperature(n),                                              &
+        &  density(n),                                                  &
+        &  stress(n)                                                    &
+        )
+
+      else if ( (density(n) > CLOSEOFF_DENSITY) .and. (density(n) < ICE_DENSITY) ) then
+        
+        pore_radius = (                                                     &
+        &  ((1.0_prec - (density(n) / ICE_DENSITY))**(1.0_prec / 3.0_prec)) &
+        &  * grain_radius(n)                                                &
+        )
+ 
+        strain_rate(n) = strain_rate(n) + tfm_density_NabarroHerringCreepMod( &
+        &  temperature(n),                                                    &
+        &  density(n),                                                        &
+        &  grain_radius(n),                                                   &
+        &  pore_radius,                                                       &
+        &  stress(n)                                                          &
+        )
+
+        strain_rate(n) = strain_rate(n) + tfm_density_DislocationCreepMod( &
+        &  temperature(n),                                                 &
+        &  density(n),                                                     &
+        &  stress(n)                                                       &
+        )
+
+      else if ( density(n) >= ICE_DENSITY ) then
+        
+        strain_rate(n) = strain_rate(n) + 0.0_prec
+
+      else
+        print *, 'Module: tfm_density'
+        print *, 'Function: tfm_density_sintering'
+        print *, ''
+        print *, 'The density seems to show and irregular value.'
+        print *, 'Stopping right here!'
+        STOP
+      end if
+    end do
+
+    ! density change
+    d_density = -(dt * strain_rate * density)
+  end function tfm_density_sintering
+
+
   function tfm_density_arthern1998(nz, dt, depth, density, temperature, &
     & age, grain_radius) result(d_density)
     implicit none
@@ -2422,6 +2475,13 @@ module tfm_density
     real(prec), dimension(nz) :: d_density
     real(prec), dimension(nz) :: stress
     real(prec), dimension(nz) :: strain_rate
+    real(prec)                :: driving_force
+    real(prec)                :: neck_radius
+    real(prec)                :: pore_radius
+
+    real(prec), parameter :: AMPLITUDE_GBO = 4.0E-6_prec ! m
+    real(prec), parameter :: MU = 0.7_prec
+    real(prec), parameter :: AIR_PRESSURE = 101325.0 ! (Pa)
 ! ----------------------------------------------------------------------
 ! Function: tfm_density_arthern1998
 !
@@ -2442,6 +2502,13 @@ module tfm_density
 !   age: Age along the firn profile (s).
 !   grain_radius: Grain radius along the firn profile (m).
 !
+! Parameters:
+!   AMPLITUDE_GBO: Amplitude of grain boundary obstructions (m), see
+!     Arthern & Wingham (1998).
+!   MU: Ratio of neck radius to grain radius.
+!   AIR_PRESSURE: Normal air pressure for the calculation of the
+!     Boyle-Mariotte law in the third stage of densification (Pa).
+!
 ! Result:
 !   d_density: Density change along the firn profile (kg m**-3).
 ! ----------------------------------------------------------------------
@@ -2451,59 +2518,105 @@ module tfm_density
     ! computation of the current stress state
     call tfm_density_computeStress(nz, depth, density, stress)
 
-    ! compuation of the strain rate
+    ! computation of the strain rate
     strain_rate(:) = 0.0_prec
+
     do n = 1, nz, 1
-      if ( ( density(n) > 0.0 ) .and. ( density(n) <= 550.0 ) ) then
-
-        strain_rate(n) = strain_rate(n) + (  &
-        &  tfm_density_grainBoundarySliding( &
-        &    density(n),                     &
-        &    temperature(n),                 &
-        &    grain_radius(n),                &
-        &    stress(n)                       &
-        &  )                                 &
-        )
-
-      else if ( ( density(n) > 550.0 ) .and. ( density(n) < 917.0 ) ) then
+      
+      if ( (density(n) > 0.0_prec) .and. (density(n) <= CRITICAL_DENSITY) ) then
         
-        strain_rate(n) = strain_rate(n) + ( &
-        &  tfm_density_dislocationCreep(    &
-        &    density(n),                    &
-        &    temperature(n),                &
-        &    stress(n)                      &
-        &  )                                &
+        neck_radius = (MU * grain_radius(n))
+
+        strain_rate(n) = strain_rate(n) + tfm_density_GrainBoundarySliding( &
+        &  temperature(n),                                                  &
+        &  density(n),                                                      &
+        &  grain_radius(n),                                                 &
+        &  neck_radius,                                                     &
+        &  AMPLITUDE_GBO,                                                   &
+        &  stress(n)                                                        &
         )
 
-        strain_rate(n) = strain_rate(n) + ( &
-        &  tfm_density_boundaryDiffusion(   &
-        &    density(n),                    &
-        &    temperature(n),                &
-        &    grain_radius(n),               &
-        &    stress(n)                      &
-        &  )                                &
+        print *, n, 'I', density(n), strain_rate(n), -dt * strain_rate(n) * density(n)
+
+      else if ( (density(n) > CRITICAL_DENSITY) .and. (density(n) <= CLOSEOFF_DENSITY) ) then
+        
+        strain_rate(n) = strain_rate(n) + tfm_density_NabarroHerringCreep( &
+        &  temperature(n),                                                 &
+        &  density(n),                                                     &
+        &  grain_radius(n),                                                &
+        &  stress(n)                                                       &
         )
 
-        strain_rate(n) = strain_rate(n) + ( &
-        &  tfm_density_latticeDiffusion(    &
-        &    density(n),                    &
-        &    temperature(n),                &
-        &    grain_radius(n),               &
-        &    stress(n)                      &
-        &  )                                &
+        strain_rate(n) = strain_rate(n) + tfm_density_CobleCreep( &
+        &  temperature(n),                                        &
+        &  grain_radius(n),                                       &
+        &  stress(n)                                              &
         )
 
-      else if ( density(n) >= 917.0 ) then
+        strain_rate(n) = strain_rate(n) + tfm_density_DislocationCreep( &
+        &  temperature(n),                                              &
+        &  density(n),                                                  &
+        &  stress(n)                                                    &
+        )
 
-         strain_rate(n) = strain_rate(n) + 0.0_prec
+        print *, n, 'II', density(n), strain_rate(n), -dt * strain_rate(n) * density(n)
+
+      else if ( (density(n) > CLOSEOFF_DENSITY) .and. (density(n) < ICE_DENSITY)) then
+        
+        pore_radius = (                                                     &
+        &  ((1.0_prec - (density(n) / ICE_DENSITY))**(1.0_prec / 3.0_prec)) &
+        &  * grain_radius(n)                                                &
+        )
+        
+        !driving_force = (                                      &
+        !&  stress(n)                                           &
+        !&  - (AIR_PRESSURE * (                                 &
+        !&    (density(n) * (ICE_DENSITY - CLOSEOFF_DENSITY))   &
+        !&    / (CLOSEOFF_DENSITY * (ICE_DENSITY - density(n))) &
+        !&  ))                                                  &
+        !)
+        driving_force = stress(n)
+         
+        strain_rate(n) = strain_rate(n) + tfm_density_NabarroHerringCreepMod( &
+        &  temperature(n),                                                    &
+        &  density(n),                                                        &
+        &  grain_radius(n),                                                   &
+        &  pore_radius,                                                       &
+        &  driving_force                                                      &
+        )
+
+        strain_rate(n) = strain_rate(n) + tfm_density_CobleCreep( &
+        &  temperature(n),                                        &
+        &  grain_radius(n),                                       &
+        &  driving_force                                          &
+        )
+
+        strain_rate(n) = strain_rate(n) + tfm_density_DislocationCreepMod( &
+        &  temperature(n),                                                 &
+        &  density(n),                                                     &
+        &  driving_force                                                   &
+        )
+
+        print *, n, 'III', density(n), strain_rate(n), -dt * strain_rate(n) * density(n)
+
+      else if ( density(n) >= ICE_DENSITY ) then
+
+        strain_rate(n) = strain_rate(n) + 0.0_prec
 
       else
-        print *, 'Module: tfm_density, Function: tfm_density_arthern1998'
+
+        print *, 'Module: tfm_density'
+        print *, 'Function: tfm_density_arthern1998'
+        print *, ''
         print *, 'The density seems to show an irregular value.'
-        print *, 'Something went wrong! Stopping right here!'
+        print *, 'Stopping right here!'
+        print *, density
         STOP
+
       end if
     end do
+
+    STOP
 
     ! densification from strain rate
     d_density = -dt * strain_rate * density
@@ -2742,7 +2855,7 @@ module tfm_density
 
     ! 10 m temperature
     do n = nz, 1, -1
-      if ( (depth(n) - depth(nz)) <= -10.0 ) EXIT
+      if ( (depth(n) - depth(nz)) <= -10.0_prec ) EXIT
     end do
     mean_temperature = temperature(n)
 
