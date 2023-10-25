@@ -3,5 +3,5 @@
 *.o
 test
 *.out
-*.dat
+./*.dat
 *.png
